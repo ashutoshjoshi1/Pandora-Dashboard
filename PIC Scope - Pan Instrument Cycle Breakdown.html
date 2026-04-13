@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pandora Scope — Instrument Lifecycle | SciGlob Instruments</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: #f5f4f0; color: #1a1a18; min-height: 100vh; padding: 1.5rem 1rem; }
+  .card { background: #ffffff; border-radius: 14px; border: 1px solid #d3d1c7; max-width: 900px; margin: 0 auto; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .header { padding: 1.5rem 1.75rem 1.1rem; border-bottom: 1px solid #e8e6df; }
+  .org { font-size: 12px; color: #888780; margin-bottom: 5px; }
+  h1 { font-size: 21px; font-weight: 500; color: #1a1a18; }
+  .tagline-main { font-size: 13px; color: #5f5e5a; margin-top: 7px; line-height: 1.6; }
+  .tagline-sub { font-size: 13px; color: #888780; margin-top: 3px; line-height: 1.6; }
+
+  .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 1rem 1.75rem; border-bottom: 1px solid #e8e6df; background: #fafaf8; }
+  .controls label { font-size: 13px; color: #5f5e5a; }
+  select { font-size: 13px; border: 1px solid #b4b2a9; border-radius: 8px; padding: 6px 10px; background: #ffffff; color: #1a1a18; cursor: pointer; -webkit-appearance: auto; }
+  .spec-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 13px; border-radius: 8px; border: 1px solid #b4b2a9; background: #f5f4f0; font-size: 13px; cursor: pointer; user-select: none; color: #5f5e5a; }
+  .spec-toggle.on { border-color: #2a7a4a; background: #f0fff5; color: #2a7a4a; }
+  .toggle-dot { width: 8px; height: 8px; border-radius: 50%; background: #b4b2a9; flex-shrink: 0; }
+  .spec-toggle.on .toggle-dot { background: #2a7a4a; }
+  .tabs-inline { display: flex; gap: 6px; }
+  .tab-inline { padding: 5px 14px; border-radius: 8px; border: 1px solid #d3d1c7; background: transparent; font-size: 13px; color: #888780; cursor: pointer; font-family: inherit; }
+  .tab-inline.active { background: #1a1a18; color: #ffffff; border-color: #1a1a18; }
+  .tab-inline:hover:not(.active) { color: #1a1a18; border-color: #888780; }
+  .ctrl-divider { width: 1px; height: 20px; background: #d3d1c7; margin: 0 2px; }
+  .new-build-label { font-size: 11px; color: #888780; font-style: italic; }
+
+  .toggle-bar { display: flex; align-items: center; justify-content: space-between; padding: 11px 1.75rem; border-bottom: 1px solid #e8e6df; cursor: pointer; user-select: none; background: #fff; }
+  .toggle-bar:hover { background: #fafaf8; }
+  .toggle-bar-label { font-size: 12px; font-weight: 600; color: #5f5e5a; text-transform: uppercase; letter-spacing: .05em; }
+  .toggle-bar-right { display: flex; align-items: center; gap: 8px; }
+  .toggle-bar-count { font-size: 11px; color: #888780; }
+  .toggle-icon { font-size: 12px; color: #b4b2a9; transition: transform .2s; }
+  .toggle-icon.open { transform: rotate(180deg); }
+  .collapsible { display: none; }
+  .collapsible.open { display: block; }
+  .queue-note { font-size: 12px; color: #5f5e5a; background: #f5f4f0; border-radius: 8px; padding: 10px 14px; margin: 1rem 1.75rem; line-height: 1.7; border-left: 3px solid #d3d1c7; }
+
+  .summary-inner { padding: 1rem 1.75rem 1.25rem; }
+  .summary-cards { display: grid; gap: 10px; }
+  .summary-cards.cols3 { grid-template-columns: repeat(3,1fr); }
+  .summary-cards.cols2 { grid-template-columns: repeat(2,1fr); max-width: 560px; }
+  @media (max-width: 620px) { .summary-cards { grid-template-columns: 1fr !important; max-width:100% !important; } }
+  .sc { border-radius: 10px; padding: 14px 14px 12px; border: 1px solid; }
+  .sc.standard { background: #f0fff5; border-color: #9FE1CB; }
+  .sc.complex  { background: #f0f4ff; border-color: #B5D4F4; }
+  .sc.worst    { background: #fff3ed; border-color: #F5C4B3; }
+  .sc.std1s    { background: #f0fff5; border-color: #9FE1CB; }
+  .sc.std2s    { background: #f5f0ff; border-color: #cec8f5; }
+  .sc-scenario { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+  .sc.standard .sc-scenario, .sc.std1s .sc-scenario { color: #085041; }
+  .sc.complex  .sc-scenario { color: #0C447C; }
+  .sc.worst    .sc-scenario { color: #712B13; }
+  .sc.std2s    .sc-scenario { color: #3C3489; }
+  .sc-sub { font-size: 10px; color: #888780; margin-bottom: 6px; font-style: italic; }
+  .sc-hrs { font-size: 26px; font-weight: 500; color: #1a1a18; line-height: 1; }
+  .sc-elapsed { font-size: 11px; color: #5f5e5a; margin-top: 4px; margin-bottom: 8px; }
+  .sc-note { font-size: 11px; color: #888780; margin-top: 6px; line-height: 1.55; }
+  .sc-bars { display: none; }
+
+  .log-inner { padding: 1rem 1.75rem 1.25rem; }
+  .log-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .log-tab { padding: 4px 14px; border-radius: 8px; border: 1px solid #d3d1c7; background: transparent; font-size: 12px; color: #888780; cursor: pointer; font-family: inherit; }
+  .log-tab.active { background: #f5f4f0; color: #1a1a18; border-color: #888780; }
+  .log-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .log-filter-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid #d3d1c7; background: transparent; font-size: 12px; color: #888780; cursor: pointer; font-family: inherit; }
+  .log-filter-btn.active         { background: #f5f4f0; color: #1a1a18; border-color: #888780; }
+  .log-filter-btn.standard-active{ background: #f0fff5; color: #085041; border-color: #9FE1CB; }
+  .log-filter-btn.complex-active { background: #f0f4ff; color: #0C447C; border-color: #B5D4F4; }
+  .log-filter-btn.worst-active   { background: #fff3ed; color: #712B13; border-color: #F5C4B3; }
+  .log-filter-btn.new-active     { background: #f5f0ff; color: #3C3489; border-color: #cec8f5; }
+  .log-table-hdr { display: grid; grid-template-columns: 70px 1fr 80px 60px 1fr; font-size: 11px; color: #888780; font-weight: 500; padding: 6px 0; border-bottom: 1px solid #d3d1c7; margin-bottom: 2px; }
+  .log-row { display: grid; grid-template-columns: 70px 1fr 80px 60px 1fr; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1efe8; }
+  .log-row:last-child { border-bottom: none; }
+  .log-id { font-size: 13px; font-weight: 500; color: #1a1a18; }
+  .log-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .log-badge.standard { background: #f0fff5; color: #085041; border: 1px solid #9FE1CB; }
+  .log-badge.complex  { background: #f0f4ff; color: #0C447C; border: 1px solid #B5D4F4; }
+  .log-badge.worst    { background: #fff3ed; color: #712B13; border: 1px solid #F5C4B3; }
+  .log-badge.worst2s  { background: #fff3ed; color: #712B13; border: 1px solid #F5C4B3; }
+  .log-badge.new1s    { background: #f0fff5; color: #085041; border: 1px solid #9FE1CB; }
+  .log-badge.newmid   { background: #f0f4ff; color: #0C447C; border: 1px solid #B5D4F4; }
+  .log-badge.new2sbest{ background: #f5f0ff; color: #3C3489; border: 1px solid #cec8f5; }
+  .log-badge.new2smid { background: #f5f0ff; color: #3C3489; border: 1px solid #cec8f5; }
+  .log-cals { font-size: 12px; color: #888780; }
+  .log-year { font-size: 12px; color: #888780; }
+  .log-notes { font-size: 11px; color: #888780; font-style: italic; }
+  .log-summary { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .log-stat { font-size: 12px; color: #5f5e5a; }
+  .log-stat strong { color: #1a1a18; font-weight: 500; }
+
+  .comp-inner { padding: 1rem 1.75rem 1.25rem; }
+  .comp-hdr { display: grid; font-size: 11px; font-weight: 500; padding: 5px 0; border-bottom: 1px solid #d3d1c7; margin-bottom: 2px; color: #888780; }
+  .comp-hdr.repair-hdr { grid-template-columns: 210px 1fr 70px 70px 70px; }
+  .comp-hdr.new-hdr    { grid-template-columns: 210px 1fr 80px 80px; }
+  .h-standard,.h-std { text-align: right; color: #085041; }
+  .h-complex          { text-align: right; color: #0C447C; }
+  .h-worst            { text-align: right; color: #712B13; }
+  .h-2s               { text-align: right; color: #3C3489; }
+  .comp-sec { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #888780; padding: 8px 0 3px; }
+  .comp-row { display: grid; align-items: center; padding: 6px 4px; border-bottom: 1px solid #f1efe8; border-radius: 6px; }
+  .comp-row.repair-row { grid-template-columns: 210px 1fr 70px 70px 70px; }
+  .comp-row.new-row    { grid-template-columns: 210px 1fr 80px 80px; }
+  .comp-row:last-child { border-bottom: none; }
+  .comp-row.changed { background: #f7f6f2; }
+  .comp-name { font-size: 12px; font-weight: 500; color: #1a1a18; }
+  .comp-fixed-tag { font-size: 10px; color: #888780; font-style: italic; }
+  .comp-cal-tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #dde8fa; color: #0C447C; font-weight: 500; margin-left: 5px; vertical-align: middle; display: inline-block; }
+  .comp-bar-wrap { padding: 0 8px; }
+  .comp-bar-bg   { height: 4px; background: #e8e6df; border-radius: 2px; overflow: hidden; }
+  .comp-bar-fill { height: 100%; border-radius: 2px; }
+  .c-standard,.c-std { font-size: 12px; text-align: right; color: #085041; }
+  .c-complex          { font-size: 12px; text-align: right; color: #0C447C; }
+  .c-worst            { font-size: 12px; font-weight: 500; text-align: right; color: #712B13; }
+  .c-2s               { font-size: 12px; font-weight: 500; text-align: right; color: #3C3489; }
+
+  .phase-toggle-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 1.75rem; border-top: 1px solid #e8e6df; margin-top: 0.5rem; cursor: pointer; user-select: none; }
+  .phase-toggle-bar:hover { background: #fafaf8; }
+  .phase-toggle-label { font-size: 12px; font-weight: 500; color: #5f5e5a; }
+  .phase-toggle-icon { font-size: 13px; color: #888780; transition: transform .2s; }
+  .phase-toggle-icon.open { transform: rotate(180deg); }
+  .phase-detail { display: none; }
+  .phase-detail.open { display: block; }
+  .table-hdr { display: grid; grid-template-columns: 230px 1fr 110px 80px; padding: 7px 1.75rem; background: #f5f4f0; font-size: 11px; color: #888780; font-weight: 500; border-bottom: 1px solid #d3d1c7; }
+  @media (max-width: 600px) { .table-hdr { grid-template-columns: 1fr 70px; } .hide-sm { display: none !important; } }
+  .phase-grid { display: flex; flex-direction: column; }
+  .sec-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #888780; padding: 10px 1.75rem 3px; }
+  .row { display: grid; grid-template-columns: 230px 1fr 110px 80px; align-items: center; padding: 9px 1.75rem; border-bottom: 1px solid #f1efe8; }
+  .row:last-child { border-bottom: none; }
+  @media (max-width: 600px) { .row { grid-template-columns: 1fr 70px; } .bar-wrap,.timeline-cell { display: none; } }
+  .row.spec-row  { border-left: 3px solid #2a7a4a; padding-left: calc(1.75rem - 3px); }
+  .row.spec-row.hidden { opacity: 0.22; }
+  .row.mgmt-row  { border-left: 3px solid #7c5cbf; padding-left: calc(1.75rem - 3px); background: #f9f8ff; }
+  .row.head-row  { border-left: 3px solid #b47a00; padding-left: calc(1.75rem - 3px); background: #fffdf0; }
+  .row.fixed-row { border-left: 3px solid #d3d1c7; padding-left: calc(1.75rem - 3px); }
+  .row.cal-row   { border-left: 3px solid #3266ad; padding-left: calc(1.75rem - 3px); background: #f0f6ff; }
+  .row.total-row { background: #f0f4ff; border-left: 3px solid #3266ad; padding-left: calc(1.75rem - 3px); font-weight: 500; border-top: 1px solid #d3d1c7; }
+  .pname { font-size: 13px; font-weight: 500; color: #1a1a18; }
+  .pdet  { font-size: 11px; color: #888780; margin-top: 2px; line-height: 1.5; }
+  .pcal-note { font-size: 11px; color: #b47a00; margin-top: 3px; font-style: italic; }
+  .adv-badge   { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #d6f0e0; color: #1e6b40; font-weight: 500; margin-left: 5px; vertical-align: middle; display: inline-block; }
+  .fixed-badge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #ebebeb; color: #5f5e5a; font-weight: 500; margin-left: 5px; vertical-align: middle; display: inline-block; }
+  .cal-badge   { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #dde8fa; color: #0C447C; font-weight: 500; margin-left: 5px; vertical-align: middle; display: inline-block; }
+  .bar-wrap { padding: 0 10px 0 0; display: flex; align-items: center; }
+  .bar-bg   { flex: 1; height: 5px; background: #e8e6df; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .timeline-cell { font-size: 10px; color: #888780; text-align: right; line-height: 1.4; }
+  .hrs-cell { font-size: 13px; font-weight: 500; color: #1a1a18; text-align: right; }
+  .hrs-cell.spec-hrs  { color: #2a7a4a; }
+  .hrs-cell.mgmt-hrs  { color: #7c5cbf; }
+  .hrs-cell.head-hrs  { color: #b47a00; }
+  .hrs-cell.total-hrs { color: #0C447C; }
+  .footer { padding: 1rem 1.75rem; border-top: 1px solid #e8e6df; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .footer-left  { font-size: 11px; color: #888780; line-height: 1.7; }
+  .footer-right { font-size: 11px; color: #b4b2a9; }
+
+  #tab-repair, #tab-new { display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="header">
+    <div class="org">SciGlob Instruments &amp; Services, LLC &nbsp;&middot;&nbsp; Pandora Spectrometer System</div>
+    <h1>Pandora Scope &mdash; Instrument Lifecycle</h1>
+    <div class="tagline-main">A full overview of the labor and process involved in each Pandora Instrument Cycle (PIC) &mdash; covering both new builds and repairs.</div>
+    <div class="tagline-sub">From intake through final shipment to the end user.</div>
+  </div>
+
+  <div class="controls">
+    <div class="tabs-inline">
+      <button class="tab-inline" id="tab-btn-new" onclick="showTab('new',this)">New Build</button>
+      <button class="tab-inline" id="tab-btn-repair" onclick="showTab('repair',this)">Repair &amp; Upgrade</button>
+    </div>
+    <div class="ctrl-divider"></div>
+    <label id="scenario-label">Configuration:</label>
+    <select id="scenarioSel" onchange="render()"></select>
+    <div class="spec-toggle" id="specToggle" onclick="toggleSpec()" style="display:none">
+      <div class="toggle-dot"></div>
+      <span id="specLabel">Spectrometer Advancement: off</span>
+    </div>
+    <span class="new-build-label" id="new-build-label">New build configurations</span>
+  </div>
+
+  <div class="toggle-bar" onclick="toggleSection('summary')">
+    <div class="toggle-bar-label">Total labor hours per scenario</div>
+    <div class="toggle-bar-right">
+      <div class="toggle-bar-count" id="summary-count"></div>
+      <div class="toggle-icon open" id="summary-icon">&#9660;</div>
+    </div>
+  </div>
+  <div class="collapsible open" id="summary-collapsible">
+    <div class="summary-inner"><div class="summary-cards" id="summary-cards"></div></div>
+  </div>
+
+  <div class="toggle-bar" onclick="toggleSection('log')">
+    <div class="toggle-bar-label">Instrument log</div>
+    <div class="toggle-bar-right">
+      <div class="toggle-bar-count">45 instruments &mdash; last 12 months</div>
+      <div class="toggle-icon" id="log-icon">&#9660;</div>
+    </div>
+  </div>
+  <div class="collapsible" id="log-collapsible">
+    <div class="log-inner">
+      <div class="log-tabs">
+        <button class="log-tab active" onclick="switchLogTab('repair',this)">Repairs &amp; Upgrades (21)</button>
+        <button class="log-tab" onclick="switchLogTab('new',this)">New Builds (24)</button>
+      </div>
+      <div id="log-repair-view">
+        <div class="log-summary" id="log-summary"></div>
+        <div class="log-filter">
+          <button class="log-filter-btn active" onclick="filterLog('all',this)">All</button>
+          <button class="log-filter-btn" onclick="filterLog('standard',this)">Standard</button>
+          <button class="log-filter-btn" onclick="filterLog('complex',this)">Complex</button>
+          <button class="log-filter-btn" onclick="filterLog('worst',this)">Worst case</button>
+          <button class="log-filter-btn" onclick="filterLog('worst2s',this)">Worst case (2S)</button>
+        </div>
+        <div class="log-table-hdr"><div>Unit</div><div>Classification</div><div>Calibrations</div><div>Built</div><div>Notes</div></div>
+        <div id="log-table"></div>
+      </div>
+      <div id="log-new-view" style="display:none">
+        <div class="log-summary" id="log-new-summary"></div>
+        <div class="log-filter">
+          <button class="log-filter-btn active" onclick="filterNewLog('all',this)">All</button>
+          <button class="log-filter-btn" onclick="filterNewLog('new1s',this)">1S Standard</button>
+          <button class="log-filter-btn" onclick="filterNewLog('newmid',this)">1S Complex</button>
+          <button class="log-filter-btn" onclick="filterNewLog('new2sbest',this)">2S Standard</button>
+          <button class="log-filter-btn" onclick="filterNewLog('new2smid',this)">2S Complex</button>
+        </div>
+        <div class="log-table-hdr"><div>Unit</div><div>Classification</div><div>Calibrations</div><div>Built</div><div>Notes</div></div>
+        <div id="log-new-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toggle-bar" onclick="toggleSection('queue')">
+    <div class="toggle-bar-label">About the timeline</div>
+    <div class="toggle-bar-right"><div class="toggle-icon" id="queue-icon">&#9660;</div></div>
+  </div>
+  <div class="collapsible" id="queue-collapsible">
+    <div class="queue-note">The SciGlob/NASA team typically manages 15+ instruments simultaneously through this process. The realistic intake-to-shipment timeline is 4&ndash;8 months per instrument depending on queue position, calibration bench availability, weather at the clearance site, and data quality requirements. The GSFC Roof Clearance phase alone spans 2&ndash;3 months of calendar time. The hours listed represent actual dedicated labor per instrument, not elapsed calendar time.</div>
+  </div>
+
+  <div class="toggle-bar" onclick="toggleSection('comp')">
+    <div class="toggle-bar-label">Phase hours &mdash; scenarios side by side</div>
+    <div class="toggle-bar-right"><div class="toggle-icon" id="comp-icon">&#9660;</div></div>
+  </div>
+  <div class="collapsible" id="comp-collapsible">
+    <div class="comp-inner">
+      <div class="comp-hdr" id="comp-hdr"></div>
+      <div id="comp-table"></div>
+    </div>
+  </div>
+
+  <div id="tab-repair">
+    <div class="phase-toggle-bar" onclick="togglePhaseDetail('repair')">
+      <div class="phase-toggle-label">Phase breakdown detail</div>
+      <div class="phase-toggle-icon" id="repair-toggle-icon">&#9660;</div>
+    </div>
+    <div class="phase-detail" id="repair-phase-detail">
+      <div class="table-hdr">
+        <div>Phase</div><div class="hide-sm" style="padding-left:8px">Effort scale (calendar days)</div>
+        <div style="text-align:right" class="hide-sm">Timeline</div><div style="text-align:right">Labor hrs</div>
+      </div>
+      <div class="phase-grid" id="repair-phases"></div>
+    </div>
+  </div>
+
+  <div id="tab-new">
+    <div class="phase-toggle-bar" onclick="togglePhaseDetail('new')">
+      <div class="phase-toggle-label">Phase breakdown detail</div>
+      <div class="phase-toggle-icon" id="new-toggle-icon">&#9660;</div>
+    </div>
+    <div class="phase-detail" id="new-phase-detail">
+      <div class="table-hdr">
+        <div>Phase</div><div class="hide-sm" style="padding-left:8px">Effort scale (calendar days)</div>
+        <div style="text-align:right" class="hide-sm">Timeline</div><div style="text-align:right">Labor hrs</div>
+      </div>
+      <div class="phase-grid" id="new-phases"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">All figures represent one complete Pandora system (1S standard unless noted) &nbsp;&middot;&nbsp; SciGlob Instruments &amp; Services, LLC<br>Based on 45 instruments over the last 12 months &nbsp;&middot;&nbsp; Updated April 2026</div>
+    <div class="footer-right">Pandora Program</div>
+  </div>
+</div>
+
+<script>
+var specOn=false, activeTab='new', activeFilter='all', activeNewFilter='all';
+var mgmtHrs={standard:18,complex:18,worst:18,std1s:18,extended:24};
+var headHrs=3;
+
+var instruments=[
+  {id:'#252',cat:'standard',cals:1, year:2022,notes:'Jan 2026 - clearing'},
+  {id:'#58', cat:'standard',cals:0, year:2018,notes:'Awaiting 1st calibration'},
+  {id:'#59', cat:'standard',cals:1, year:2018,notes:''},
+  {id:'#65', cat:'standard',cals:1, year:2018,notes:''},
+  {id:'#66', cat:'standard',cals:1, year:2018,notes:''},
+  {id:'#206',cat:'standard',cals:1, year:2021,notes:''},
+  {id:'#111',cat:'complex', cals:1, year:2015,notes:'New build sensor head'},
+  {id:'#210',cat:'complex', cals:2, year:2021,notes:''},
+  {id:'#205',cat:'complex', cals:2, year:2021,notes:''},
+  {id:'#60', cat:'complex', cals:3, year:2018,notes:''},
+  {id:'#207',cat:'complex', cals:2, year:2021,notes:''},
+  {id:'#24', cat:'worst',   cals:2, year:2018,notes:''},
+  {id:'#150',cat:'worst',   cals:3, year:2019,notes:''},
+  {id:'#57', cat:'worst',   cals:10,year:2018,notes:'Extended calibration validation'},
+  {id:'#197',cat:'worst',   cals:2, year:2021,notes:''},
+  {id:'#157',cat:'worst',   cals:3, year:2019,notes:''},
+  {id:'#63', cat:'worst',   cals:3, year:2018,notes:''},
+  {id:'#84', cat:'worst',   cals:4, year:2023,notes:''},
+  {id:'#213',cat:'worst',   cals:3, year:2021,notes:''},
+  {id:'#230',cat:'worst2s', cals:2, year:2022,notes:'Aug 2025 - Feb 2026 / 2S unit'},
+  {id:'#231',cat:'worst2s', cals:2, year:2022,notes:'2S unit'}
+];
+
+var newInstruments=[
+  {id:'#286',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#287',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#288',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#289',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#291',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#292',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#293',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#294',cat:'new1s',    cals:1,year:"'25",notes:''},
+  {id:'#306',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#307',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#308',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#309',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#310',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#311',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#312',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#313',cat:'new1s',    cals:1,year:"'26",notes:''},
+  {id:'#290',cat:'newmid',   cals:2,year:"'25",notes:'Filter wheel issue'},
+  {id:'#295',cat:'new2sbest',cals:1,year:"'25",notes:'2S unit'},
+  {id:'#301',cat:'new2sbest',cals:1,year:"'25",notes:'2S unit'},
+  {id:'#302',cat:'new2sbest',cals:1,year:"'25",notes:'2S unit'},
+  {id:'#303',cat:'new2sbest',cals:1,year:"'25",notes:'2S unit'},
+  {id:'#304',cat:'new2sbest',cals:1,year:"'25",notes:'2S unit'},
+  {id:'#296',cat:'new2smid', cals:2,year:"'25",notes:'Lens issue / 2S unit'},
+  {id:'#297',cat:'new2smid', cals:2,year:"'25",notes:'Lens issue / 2S unit'}
+];
+
+var catLabels={
+  standard:'Standard',complex:'Complex',worst:'Worst case',worst2s:'Worst case (2S)',
+  new1s:'1S Standard',newmid:'1S Complex',new2sbest:'2S Standard',new2smid:'2S Complex'
+};
+
+var scNotes={
+  standard:'Smooth repair process with no repeat calibrations or additional SciGlob Lab cycles. Favorable weather and clean data analysis. Typical of a well-maintained unit returning from the field.',
+  complex: 'Several debugging sessions across the SciGlob rooftop and lab during the calibration phase. May involve older internal hardware requiring extended component work, and potential optical uncertainty requiring an initial assessment calibration before repairs can be confirmed. Multiple calibration sessions typical, with a longer and more intensive clearance period.',
+  worst:   'Repeat cycles between SciGlob Roof, Lab, and GSFC roof to address persistent retrieval or data quality issues. Multiple calibrations and clearance periods required. Usually involves a spectrometer or optical element repair, which is highly involved. Significant component degradation common, often from extended field exposure to humidity and environmental stress.',
+  standard_new:'Clean build with straightforward assembly, one calibration cycle, and a standard clearance period. No repeat roof cycles.',
+  extended:'Dual spectrometer build requiring additional alignment, extended SciGlob roof validation, and independent calibration of both channels. Both spectrometer channels must clear independently through the full GSFC clearance process.'
+};
+
+var elapsed={
+  standard:'~4-5 months &nbsp;&middot;&nbsp; ~18-20 weeks',
+  complex: '~5-7 months &nbsp;&middot;&nbsp; ~22-28 weeks',
+  worst:   '~8-12 months &nbsp;&middot;&nbsp; ~32-48 weeks',
+  std1s:   '~4-5 months &nbsp;&middot;&nbsp; ~18-20 weeks',
+  extended:'~6-7 months &nbsp;&middot;&nbsp; ~24-28 weeks'
+};
+
+var repair={
+  standard:[
+    {sec:'Instrument Intake',          name:'Intake',                  det:'2 techs - receiving inspection, full inventory, and condition photo documentation',hrs:4, col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Clean & Revive',          det:'1 tech - decontamination, surface cleaning, and lab-ready preparation. Includes flagging of physical defects, corrosion, or seal damage.',hrs:2,col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Inspect & Test',          det:'Multi-tech - visual component inspection, initial power-on sequence, and communications verification',hrs:8,col:'#7fa8d1',days:2},
+    {sec:'Component Work',             name:'Enclosure',               det:'1-2 techs - structural inspection, component repair, and system upgrade of all enclosure hardware',hrs:16,col:'#5b9bd5',days:3},
+    {sec:'Component Work',             name:'Sensor Head',             det:'Senior tech with peer review - firmware verification, filter wheel motor testing, and optical alignment',hrs:23,col:'#5b9bd5',days:5},
+    {sec:'Component Work',             name:'Tracker',                 det:'1 tech - tracker mechanism service, cable inspection, and connectivity verification',hrs:6,col:'#5b9bd5',days:1},
+    {sec:'Component Work',             name:'Spectrometer Advancement',det:'Senior engineer - experimental in-house spectrometer restoration and optical realignment initiative',hrs:40,col:'#2a7a4a',days:7,spec:true},
+    {sec:'Roof Testing & Calibration', name:'SciGlob Roof Test',       det:'Daily operational monitoring - real-world outdoor validation of Sensor Head and spectrometer performance. Instrument cycles between roof and lab as needed.',hrs:20,col:'#3266ad',days:21,fixed:true},
+    {sec:'Roof Testing & Calibration', name:'Lab Test (Pre-Cal)',      det:'Full system overnight lab test with multi-technician review before calibration handoff',hrs:6,col:'#3266ad',days:2},
+    {sec:'Roof Testing & Calibration', name:'Calibration',            det:'Engineer - radiometric, wavelength, and stray light calibration on dedicated bench. Includes cooling cycles and temperature stability holds between measurements.',hrs:20,col:'#3266ad',days:3,cal:true,calNote:'Standard: 1 calibration. Each recalibration resets the clearance period and occupies shared bench time.'},
+    {sec:'Roof Testing & Calibration', name:'GSFC Roof Clearance',    det:'Instrument deployed on GSFC calibration site rooftop collecting real sun data. Monitoring and quality checks performed throughout. Calendar time significantly exceeds hands-on hours.',hrs:12,col:'#3266ad',days:60},
+    {sec:'Roof Testing & Calibration', name:'Data Processing',        det:'Scientist/engineer - full spectral data analysis, performance validation, clearance documentation, and formal instrument sign-off',hrs:50,col:'#3266ad',days:4},
+    {sec:'Quality Control & Shipment', name:'Final QC & Pack',        det:'4-5 technicians - sequential QC checklist sign-off, component by component, before packing',hrs:14,col:'#4a7fb5',days:2,fixed:true},
+    {sec:'Quality Control & Shipment', name:'Shipping Logistics',     det:'Custom crating, packing, and full international shipping coordination and documentation',hrs:3,col:'#4a7fb5',days:3,fixed:true}
+  ],
+  complex:[
+    {sec:'Instrument Intake',          name:'Intake',                  det:'2 techs - receiving inspection, full inventory, and condition photo documentation',hrs:5,col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Clean & Revive',          det:'1 tech - decontamination, surface cleaning, and lab-ready preparation. Includes flagging of physical defects, corrosion, or seal damage.',hrs:3,col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Inspect & Test',          det:'Multi-tech - visual component inspection, initial power-on sequence, and communications verification',hrs:18,col:'#7fa8d1',days:4},
+    {sec:'Component Work',             name:'Enclosure',               det:'2 techs - structural inspection, component repair, and system upgrade of all enclosure hardware',hrs:28,col:'#5b9bd5',days:5},
+    {sec:'Component Work',             name:'Sensor Head',             det:'Senior tech with peer review - firmware verification, filter wheel motor testing, and optical alignment',hrs:30,col:'#5b9bd5',days:7},
+    {sec:'Component Work',             name:'Tracker',                 det:'1 tech - tracker mechanism service, cable inspection, and connectivity verification',hrs:6,col:'#5b9bd5',days:1},
+    {sec:'Component Work',             name:'Spectrometer Advancement',det:'Senior engineer - experimental in-house spectrometer restoration and optical realignment initiative',hrs:80,col:'#2a7a4a',days:14,spec:true},
+    {sec:'Roof Testing & Calibration', name:'SciGlob Roof Test',       det:'Daily operational monitoring - real-world outdoor validation of Sensor Head and spectrometer performance. Instrument cycles between roof and lab as needed.',hrs:20,col:'#3266ad',days:21,fixed:true},
+    {sec:'Roof Testing & Calibration', name:'Lab Test (Pre-Cal)',      det:'Full system overnight lab test with multi-technician review before calibration handoff',hrs:8,col:'#3266ad',days:2},
+    {sec:'Roof Testing & Calibration', name:'Calibration',            det:'Engineer - approximately 1.5 calibration cycles including cooling and temperature stability holds. Initial assessment calibration may be required before repairs are confirmed.',hrs:30,col:'#3266ad',days:5,cal:true,calNote:'Complex: ~1.5 calibrations. Additional tech hours cover transport and setup. Each recalibration resets the clearance period.'},
+    {sec:'Roof Testing & Calibration', name:'GSFC Roof Clearance',    det:'Instrument deployed on GSFC calibration site rooftop collecting real sun data. Monitoring and quality checks performed throughout. Calendar time significantly exceeds hands-on hours.',hrs:20,col:'#3266ad',days:75},
+    {sec:'Roof Testing & Calibration', name:'Data Processing',        det:'Scientist/engineer - full spectral data analysis, repeat review cycles, clearance documentation, and formal instrument sign-off',hrs:79,col:'#3266ad',days:5},
+    {sec:'Quality Control & Shipment', name:'Final QC & Pack',        det:'4-5 technicians - sequential QC checklist sign-off, component by component, before packing',hrs:14,col:'#4a7fb5',days:2,fixed:true},
+    {sec:'Quality Control & Shipment', name:'Shipping Logistics',     det:'Custom crating, packing, and full international shipping coordination and documentation',hrs:3,col:'#4a7fb5',days:3,fixed:true}
+  ],
+  worst:[
+    {sec:'Instrument Intake',          name:'Intake',                  det:'2 techs - receiving inspection, full inventory, and condition photo documentation',hrs:6,col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Clean & Revive',          det:'1 tech - decontamination, surface cleaning, and lab-ready preparation. Includes flagging of physical defects, corrosion, or seal damage.',hrs:4,col:'#7fa8d1',days:1},
+    {sec:'Instrument Intake',          name:'Inspect & Test',          det:'Multi-tech - visual component inspection, extended communications debugging, and initial repair triage',hrs:28,col:'#7fa8d1',days:6},
+    {sec:'Component Work',             name:'Enclosure',               det:'2+ techs - structural inspection, heavy component replacement, and full system upgrade of enclosure hardware',hrs:48,col:'#5b9bd5',days:8},
+    {sec:'Component Work',             name:'Sensor Head',             det:'Senior tech with peer review - multiple roof cycles, repeat firmware and optical alignment work',hrs:60,col:'#5b9bd5',days:14},
+    {sec:'Component Work',             name:'Tracker',                 det:'1 tech - tracker mechanism service, cable inspection, and connectivity verification',hrs:6,col:'#5b9bd5',days:1},
+    {sec:'Component Work',             name:'Spectrometer Advancement',det:'Senior engineer - experimental in-house spectrometer restoration and optical realignment initiative',hrs:200,col:'#2a7a4a',days:28,spec:true},
+    {sec:'Roof Testing & Calibration', name:'SciGlob Roof Test',       det:'Extended daily operational monitoring - repeat cycles between roof and lab to address recurring performance findings',hrs:28,col:'#3266ad',days:21,fixed:true},
+    {sec:'Roof Testing & Calibration', name:'Lab Test (Pre-Cal)',      det:'Multi-round lab testing with engineer involvement between repeat cycles',hrs:14,col:'#3266ad',days:4},
+    {sec:'Roof Testing & Calibration', name:'Calibration',            det:'Engineer - multiple recalibration cycles required. Each recalibration resets the clearance period.',hrs:55,col:'#3266ad',days:10,cal:true,calNote:'Worst case: 2.5-3 calibrations. Each recalibration resets the clearance period and occupies bench time that could serve another instrument.'},
+    {sec:'Roof Testing & Calibration', name:'GSFC Roof Clearance',    det:'Instrument deployed on GSFC calibration site rooftop. Extended collection due to weather, data quality requirements, and repeat clearance cycles.',hrs:35,col:'#3266ad',days:90},
+    {sec:'Roof Testing & Calibration', name:'Data Processing',        det:'Scientists - repeat clearance cycles, full spectral reanalysis, and formal instrument sign-off',hrs:80,col:'#3266ad',days:6},
+    {sec:'Quality Control & Shipment', name:'Final QC & Pack',        det:'4-5 technicians - sequential QC checklist sign-off, component by component, before packing',hrs:14,col:'#4a7fb5',days:2,fixed:true},
+    {sec:'Quality Control & Shipment', name:'Shipping Logistics',     det:'Custom crating, packing, and full international shipping coordination and documentation',hrs:3,col:'#4a7fb5',days:3,fixed:true}
+  ]
+};
+
+var newBuild={
+  std1s:[
+    {sec:'Component Work',             name:'Enclosure Build',         det:'2 techs - full build and wiring from components',hrs:28,col:'#5b9bd5',days:5},
+    {sec:'Component Work',             name:'Tracker Build',           det:'1 tech - full assembly and cable work',hrs:6,col:'#5b9bd5',days:1},
+    {sec:'Component Work',             name:'Sensor Head Build',       det:'Senior tech with peer review - firmware verification, filter wheel motor testing, and optical alignment',hrs:20,col:'#5b9bd5',days:3},
+    {sec:'Component Work',             name:'Spectrometer Advancement',det:'Senior engineer - experimental in-house spectrometer integration and optical realignment initiative',hrs:80,col:'#2a7a4a',days:14,spec:true},
+    {sec:'Roof Testing & Calibration', name:'Full System Lab Test',    det:'Multi-tech - complete power-on, communications, and full function verification',hrs:16,col:'#7fa8d1',days:3},
+    {sec:'Roof Testing & Calibration', name:'SciGlob Roof Test',       det:'Daily operational monitoring - real-world outdoor validation of Sensor Head and spectrometer performance. Instrument cycles between roof and lab as needed.',hrs:20,col:'#3266ad',days:21,fixed:true},
+    {sec:'Roof Testing & Calibration', name:'Calibration',            det:'Engineer - radiometric, wavelength, and stray light calibration on dedicated bench. Includes cooling cycles and temperature stability holds. Bench occupied approximately 3 days.',hrs:22,col:'#3266ad',days:3,cal:true,calNote:'1S standard: 1 calibration. Bench occupied approximately 3 days including cooling cycles.'},
+    {sec:'Roof Testing & Calibration', name:'GSFC Roof Clearance',    det:'Instrument deployed on GSFC calibration site rooftop collecting real sun data. Monitoring and quality checks performed throughout. Calendar time significantly exceeds hands-on hours.',hrs:12,col:'#3266ad',days:60},
+    {sec:'Roof Testing & Calibration', name:'Data Processing',        det:'Scientist/engineer - full spectral data analysis, performance validation, clearance documentation, and formal instrument sign-off',hrs:45,col:'#3266ad',days:3},
+    {sec:'Quality Control & Shipment', name:'Final QC & Pack',        det:'4-5 technicians - sequential QC checklist sign-off, component by component, before packing',hrs:14,col:'#4a7fb5',days:2,fixed:true},
+    {sec:'Quality Control & Shipment', name:'Shipping Logistics',     det:'Custom crating, packing, and full international shipping coordination and documentation',hrs:3,col:'#4a7fb5',days:3,fixed:true}
+  ],
+  std2s:[
+    {sec:'Component Work',             name:'Enclosure Build',         det:'2-3 techs - full dual-spectrometer build and wiring. Additional time for second spectrometer bay, cabling, and alignment.',hrs:42,col:'#5b9bd5',days:7},
+    {sec:'Component Work',             name:'Tracker Build',           det:'1 tech - full assembly and cable work',hrs:6,col:'#5b9bd5',days:1},
+    {sec:'Component Work',             name:'Sensor Head Build',       det:'Senior tech with peer review - dual spectrometer firmware, filter wheel motor testing, and optical alignment for both channels',hrs:30,col:'#5b9bd5',days:5},
+    {sec:'Component Work',             name:'Spectrometer Advancement',det:'Senior engineer - experimental in-house dual spectrometer integration and optical realignment initiative',hrs:80,col:'#2a7a4a',days:14,spec:true},
+    {sec:'Roof Testing & Calibration', name:'Full System Lab Test',    det:'Multi-tech - complete power-on, communications, and full function verification for both spectrometer channels',hrs:20,col:'#7fa8d1',days:3},
+    {sec:'Roof Testing & Calibration', name:'SciGlob Roof Test',       det:'Extended daily operational monitoring - dual spectrometer validation requires additional roof cycles and alignment checks for both channels.',hrs:35,col:'#3266ad',days:21,fixed:true},
+    {sec:'Roof Testing & Calibration', name:'Calibration',            det:'Engineer - full radiometric, wavelength, and stray light calibration for both spectrometer channels independently. Nearly double bench time vs 1S.',hrs:44,col:'#3266ad',days:5,cal:true,calNote:'2S: both spectrometer channels calibrated independently. Bench occupied approximately 5 days.'},
+    {sec:'Roof Testing & Calibration', name:'GSFC Roof Clearance',    det:'Instrument deployed on GSFC calibration site rooftop. Both spectrometer channels must clear independently. Extended collection period.',hrs:24,col:'#3266ad',days:75},
+    {sec:'Roof Testing & Calibration', name:'Data Processing',        det:'Scientist/engineer - dual channel spectral data analysis, performance validation for both channels, clearance documentation, and formal sign-off',hrs:60,col:'#3266ad',days:4},
+    {sec:'Quality Control & Shipment', name:'Final QC & Pack',        det:'4-5 technicians - sequential QC checklist sign-off for dual spectrometer system before packing',hrs:18,col:'#4a7fb5',days:2,fixed:true},
+    {sec:'Quality Control & Shipment', name:'Shipping Logistics',     det:'Custom crating, packing, and full international shipping coordination and documentation',hrs:3,col:'#4a7fb5',days:3,fixed:true}
+  ]
+};
+
+function getActive(p){return p.filter(function(x){return !x.spec||specOn;});}
+function getMgmtPhase(sc){var mh=mgmtHrs[sc]||18;return {sec:'Program Coordination',name:'Cycle Management',det:'Daily instrument oversight at SciGlob and remotely - coordinating the full team across reviews, documentation, scheduling, and all instrument-specific requirements.',hrs:mh,col:'#7c5cbf',days:0,mgmt:true};}
+var headPhase={sec:'Program Coordination',name:'Head Engineer Review',det:'Senior engineer quality assurance - periodic oversight and technical review throughout the lifecycle.',hrs:3,col:'#b47a00',days:0,head:true};
+function totalHrs(phases,sc){return getActive(phases).reduce(function(s,p){return s+p.hrs;},0)+(mgmtHrs[sc]||18)+headHrs;}
+function totalDays(phases){return getActive(phases).reduce(function(s,p){return s+(p.days||0);},0);}
+function sumBySecDays(phases,sec){return getActive(phases).filter(function(p){return p.sec===sec;}).reduce(function(s,p){return s+(p.days||0);},0);}
+
+function toggleSection(id){
+  document.getElementById(id+'-collapsible').classList.toggle('open');
+  document.getElementById(id+'-icon').classList.toggle('open');
+}
+
+function renderSummaryCards(){
+  var isRepair=activeTab==='repair';
+  var scKeys=isRepair?['standard','complex','worst']:['std1s','extended'];
+  var scClasses=isRepair?['standard','complex','worst']:['std1s','std2s'];
+  var scLabels=isRepair?['Standard','Complex','Worst case']:['1S Standard','2S Dual Spectrometer'];
+  var scSubs=isRepair?['Clean repair / well-maintained unit','Multi-session repair / older hardware']:['Single spectrometer new build','Dual spectrometer new build'];
+  var noteKeys=isRepair?['standard','complex','worst']:['standard_new','extended'];
+  var phasesList=isRepair?[repair.standard,repair.complex,repair.worst]:[newBuild.std1s,newBuild.std2s];
+  var cardsEl=document.getElementById('summary-cards');
+  cardsEl.className=isRepair?'summary-cards cols3':'summary-cards cols2';
+  document.getElementById('summary-count').textContent=isRepair?'3 scenarios':'2 configurations';
+  var secs=isRepair?['Instrument Intake','Component Work','Roof Testing & Calibration','Quality Control & Shipment']:['Component Work','Roof Testing & Calibration','Quality Control & Shipment'];
+  var secCols=['#7fa8d1','#5b9bd5','#3266ad','#4a7fb5'];
+  var secLbls=isRepair?['Instrument Intake','Component Work','Roof & Cal','QC & Shipment']:['Component Work','Roof & Cal','QC & Shipment'];
+  var html='';
+  for(var i=0;i<scKeys.length;i++){
+    var ph=phasesList[i],sc=scKeys[i],th=totalHrs(ph,sc),td=totalDays(ph);
+    var bars='';
+    for(var j=0;j<secs.length;j++){
+      var sd=sumBySecDays(ph,secs[j]),pct=td>0?Math.round((sd/td)*100):0;
+      var ci=isRepair?j:j+1; if(ci>=secCols.length)ci=secCols.length-1;
+      bars+='<div class="sc-bar-row"><div class="sc-bar-lbl">'+secLbls[j]+'</div><div class="sc-bar-bg"><div class="sc-bar-fill" style="width:'+pct+'%;background:'+secCols[ci]+'"></div></div><div class="sc-bar-val">'+sd+'d</div></div>';
+    }
+    html+='<div class="sc '+scClasses[i]+'"><div class="sc-scenario">'+scLabels[i]+'</div><div class="sc-sub">'+scSubs[i]+'</div><div class="sc-hrs">'+th+' hrs</div><div class="sc-elapsed">'+elapsed[sc]+'</div><div class="sc-note">'+scNotes[noteKeys[i]]+'</div><div class="sc-bars">'+bars+'</div></div>';
+  }
+  cardsEl.innerHTML=html;
+}
+
+function renderLog(){
+  var filtered=activeFilter==='all'?instruments:instruments.filter(function(x){return x.cat===activeFilter;});
+  var c={standard:0,complex:0,worst:0,worst2s:0};
+  instruments.forEach(function(x){if(c[x.cat]!==undefined)c[x.cat]++;});
+  document.getElementById('log-summary').innerHTML='<div class="log-stat"><strong>'+instruments.length+'</strong> total</div><div class="log-stat" style="color:#085041"><strong>'+c.standard+'</strong> standard</div><div class="log-stat" style="color:#0C447C"><strong>'+c.complex+'</strong> complex</div><div class="log-stat" style="color:#712B13"><strong>'+(c.worst+c.worst2s)+'</strong> worst case</div>';
+  var html='';
+  filtered.forEach(function(x){
+    var cs=x.cals===0?'Awaiting first cal':x.cals+(x.cals===1?' cal':' cals');
+    html+='<div class="log-row"><div class="log-id">'+x.id+'</div><div><span class="log-badge '+x.cat+'">'+catLabels[x.cat]+'</span></div><div class="log-cals">'+cs+'</div><div class="log-year">'+x.year+'</div><div class="log-notes">'+x.notes+'</div></div>';
+  });
+  document.getElementById('log-table').innerHTML=html;
+}
+
+function renderNewLog(){
+  var filtered=activeNewFilter==='all'?newInstruments:newInstruments.filter(function(x){return x.cat===activeNewFilter;});
+  var c={new1s:0,newmid:0,new2sbest:0,new2smid:0};
+  newInstruments.forEach(function(x){if(c[x.cat]!==undefined)c[x.cat]++;});
+  document.getElementById('log-new-summary').innerHTML='<div class="log-stat"><strong>'+newInstruments.length+'</strong> total</div><div class="log-stat" style="color:#085041"><strong>'+c.new1s+'</strong> 1S standard</div><div class="log-stat" style="color:#0C447C"><strong>'+c.newmid+'</strong> 1S complex</div><div class="log-stat" style="color:#3C3489"><strong>'+(c.new2sbest+c.new2smid)+'</strong> 2S units</div>';
+  var html='';
+  filtered.forEach(function(x){
+    var cs=x.cals===0?'Awaiting first cal':x.cals+(x.cals===1?' cal':' cals');
+    html+='<div class="log-row"><div class="log-id">'+x.id+'</div><div><span class="log-badge '+x.cat+'">'+catLabels[x.cat]+'</span></div><div class="log-cals">'+cs+'</div><div class="log-year">'+x.year+'</div><div class="log-notes">'+x.notes+'</div></div>';
+  });
+  document.getElementById('log-new-table').innerHTML=html;
+}
+
+function filterLog(cat,btn){
+  activeFilter=cat;
+  document.querySelectorAll('#log-repair-view .log-filter-btn').forEach(function(b){b.className='log-filter-btn';});
+  btn.classList.add(cat==='all'?'active':cat==='standard'?'standard-active':cat==='complex'?'complex-active':'worst-active');
+  renderLog();
+}
+
+function filterNewLog(cat,btn){
+  activeNewFilter=cat;
+  document.querySelectorAll('#log-new-view .log-filter-btn').forEach(function(b){b.className='log-filter-btn';});
+  btn.classList.add(cat==='all'?'active':cat==='new1s'?'standard-active':cat==='newmid'?'complex-active':'new-active');
+  renderNewLog();
+}
+
+function switchLogTab(tab,el){
+  document.getElementById('log-repair-view').style.display=tab==='repair'?'':'none';
+  document.getElementById('log-new-view').style.display=tab==='new'?'':'none';
+  document.querySelectorAll('.log-tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+}
+
+function renderCompTable(){
+  var isRepair=activeTab==='repair';
+  var hdrEl=document.getElementById('comp-hdr');
+  if(isRepair){
+    hdrEl.className='comp-hdr repair-hdr';
+    hdrEl.innerHTML='<div>Phase</div><div style="padding-left:8px">Scale</div><div class="h-standard">Standard</div><div class="h-complex">Complex</div><div class="h-worst">Worst</div>';
+  } else {
+    hdrEl.className='comp-hdr new-hdr';
+    hdrEl.innerHTML='<div>Phase</div><div style="padding-left:8px">Scale</div><div class="h-std">1S Standard</div><div class="h-2s">2S Dual</div>';
+  }
+  var base=isRepair?repair.standard:newBuild.std1s;
+  var all=base.concat([getMgmtPhase(isRepair?'standard':'std1s'),headPhase]);
+  var nameMap={},ordered=[];
+  all.forEach(function(p){if(!nameMap[p.name]){nameMap[p.name]=p;ordered.push(p.name);}});
+  var bMap={},mMap={},wMap={};
+  if(isRepair){
+    repair.standard.forEach(function(p){bMap[p.name]=p.hrs;});
+    repair.complex.forEach(function(p){mMap[p.name]=p.hrs;});
+    repair.worst.forEach(function(p){wMap[p.name]=p.hrs;});
+    bMap['Cycle Management']=mgmtHrs.standard; mMap['Cycle Management']=mgmtHrs.complex; wMap['Cycle Management']=mgmtHrs.worst;
+  } else {
+    newBuild.std1s.forEach(function(p){bMap[p.name]=p.hrs;});
+    newBuild.std2s.forEach(function(p){mMap[p.name]=p.hrs;});
+    bMap['Cycle Management']=mgmtHrs.std1s; mMap['Cycle Management']=mgmtHrs.extended;
+  }
+  bMap['Head Engineer Review']=mMap['Head Engineer Review']=wMap['Head Engineer Review']=headHrs;
+  var maxHrs=0;
+  ordered.forEach(function(n){var w=isRepair?(wMap[n]||0):(mMap[n]||0);if(w>maxHrs)maxHrs=w;});
+  var lastSec='',html='';
+  ordered.forEach(function(name){
+    var p=nameMap[name];
+    if(!specOn&&p.spec) return;
+    if(p.sec!==lastSec){lastSec=p.sec;html+='<div class="comp-sec">'+p.sec+'</div>';}
+    var bh=bMap[name]||0,mh=mMap[name]||0,wh=wMap[name]||0;
+    var changed=isRepair?(bh!==mh||mh!==wh):(bh!==mh);
+    var pct=maxHrs>0?Math.round(((isRepair?wh:mh)/maxHrs)*100):0;
+    var ft=p.fixed?' <span class="comp-fixed-tag">(fixed)</span>':'';
+    var ct=p.cal?'<span class="comp-cal-tag">cal bench</span>':'';
+    var rc=isRepair?'comp-row repair-row':'comp-row new-row';
+    var third=isRepair?'<div class="c-worst">'+wh+'</div>':'<div class="c-2s">'+mh+'</div>';
+    html+='<div class="'+rc+(changed?' changed':'')+'"><div class="comp-name">'+name+ft+' '+ct+'</div><div class="comp-bar-wrap"><div class="comp-bar-bg"><div class="comp-bar-fill" style="width:'+pct+'%;background:'+p.col+'"></div></div></div><div class="c-standard">'+bh+'</div><div class="c-complex">'+mh+'</div>'+third+'</div>';
+  });
+  document.getElementById('comp-table').innerHTML=html;
+}
+
+function renderPhaseList(phases,containerId,sc){
+  var mgmt=getMgmtPhase(sc);
+  var all=phases.concat([mgmt,headPhase]);
+  var active=all.filter(function(p){return !p.spec||specOn;});
+  var maxDays=0; active.forEach(function(p){if((p.days||0)>maxDays)maxDays=p.days||0;}); if(!maxDays)maxDays=1;
+  var runDays=0,totalH=0,totalD=0;
+  var container=document.getElementById(containerId); container.innerHTML='';
+  var lastSec='';
+  all.forEach(function(p){
+    if(p.sec!==lastSec){lastSec=p.sec;var s=document.createElement('div');s.className='sec-label';s.textContent=p.sec;container.appendChild(s);}
+    var hidden=p.spec&&!specOn;
+    var pct=Math.round(((p.days||0)/maxDays)*100);
+    var rc='row'+(p.spec?' spec-row':'')+(p.mgmt?' mgmt-row':'')+(p.head?' head-row':'')+(p.fixed?' fixed-row':'')+(p.cal?' cal-row':'')+(hidden?' hidden':'');
+    var badge=(p.spec?'<span class="adv-badge">advancement</span>':'')+(p.fixed?'<span class="fixed-badge">fixed</span>':'')+(p.cal?'<span class="cal-badge">cal bench</span>':'');
+    var hc='hrs-cell'+(p.spec?' spec-hrs':'')+(p.mgmt?' mgmt-hrs':'')+(p.head?' head-hrs':'');
+    var cn=(p.calNote&&!hidden)?'<div class="pcal-note">'+p.calNote+'</div>':'';
+    var tl='';
+    if(!hidden&&p.days>0){var sd=runDays+1;runDays+=p.days;var sw=Math.ceil(sd/7),ew=Math.ceil(runDays/7);tl=sw===ew?'Wk '+sw+' (Day '+sd+'-'+runDays+')':'Wk '+sw+'-'+ew;}
+    else if(!hidden){tl='Ongoing';}
+    if(!hidden){totalH+=p.hrs;totalD+=(p.days||0);}
+    var row=document.createElement('div'); row.className=rc;
+    row.innerHTML='<div><div class="pname">'+p.name+badge+'</div><div class="pdet">'+p.det+'</div>'+cn+'</div><div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:'+(hidden?0:pct)+'%;background:'+p.col+'"></div></div></div><div class="timeline-cell">'+tl+'</div><div class="'+hc+'">'+p.hrs+' hrs</div>';
+    container.appendChild(row);
+  });
+  var wks=Math.round(totalD/7*10)/10, mos=Math.round(totalD/30.4*10)/10;
+  var tr=document.createElement('div'); tr.className='row total-row';
+  tr.innerHTML='<div><div class="pname">Total</div><div class="pdet">Full Pandora system &mdash; all phases</div></div><div class="bar-wrap"></div><div class="timeline-cell" style="color:#3266ad;font-weight:500">~'+mos+' mo &nbsp;&middot;&nbsp; ~'+wks+' wks</div><div class="hrs-cell total-hrs">'+totalH+' hrs</div>';
+  container.appendChild(tr);
+}
+
+function toggleSpec(){
+  specOn=!specOn;
+  document.getElementById('specToggle').classList.toggle('on',specOn);
+  document.getElementById('specLabel').textContent=specOn?'Spectrometer Advancement: on':'Spectrometer Advancement: off';
+  render();
+}
+
+function togglePhaseDetail(tab){
+  document.getElementById(tab+'-phase-detail').classList.toggle('open');
+  document.getElementById(tab+'-toggle-icon').classList.toggle('open');
+}
+
+function render(){
+  var isRepair=activeTab==='repair';
+  var sel=document.getElementById('scenarioSel');
+  var specEl=document.getElementById('specToggle');
+  var lblEl=document.getElementById('scenario-label');
+  var nbLabel=document.getElementById('new-build-label');
+  if(isRepair){
+    if(sel.innerHTML.indexOf('Standard')<0||sel.options.length!==3)
+      sel.innerHTML='<option value="standard">Standard</option><option value="complex" selected>Complex</option><option value="worst">Worst case</option>';
+    specEl.style.display=''; lblEl.textContent='Scenario:'; nbLabel.style.display='none';
+    if(!['standard','complex','worst'].includes(sel.value)) sel.value='complex';
+    document.getElementById('tab-repair').style.display='';
+    document.getElementById('tab-new').style.display='none';
+  } else {
+    sel.innerHTML='<option value="best">1S Standard</option><option value="worst">2S Dual Spectrometer</option>';
+    specEl.style.display='none'; lblEl.textContent='Configuration:'; nbLabel.style.display='';
+    document.getElementById('tab-repair').style.display='none';
+    document.getElementById('tab-new').style.display='';
+  }
+  var sc=sel.value;
+  renderSummaryCards(); renderLog(); renderNewLog(); renderCompTable();
+  if(isRepair){
+    renderPhaseList(repair[sc]||repair.complex,'repair-phases',sc);
+  } else {
+    var ph=sc==='worst'?newBuild.std2s:newBuild.std1s;
+    renderPhaseList(ph,'new-phases',sc==='worst'?'extended':'std1s');
+  }
+}
+
+function showTab(tab,el){
+  activeTab=tab;
+  document.querySelectorAll('.tab-inline').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  render();
+}
+
+showTab('new', document.getElementById('tab-btn-new'));
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  fullName      String
+  email         String   @unique
+  passwordHash  String
+  role          String   @default("viewer") // admin, editor, viewer
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  comments      Comment[]
+  activities    Activity[]
+  workspaceAccess UserWorkspaceAccess[]
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  color       String   @default("#3266ad")
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  boards      Board[]
+  userAccess  UserWorkspaceAccess[]
+}
+
+model UserWorkspaceAccess {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("viewer")
+  createdAt   DateTime @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Board {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  description String?
+  workspaceId String
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lists       BoardList[]
+
+  @@unique([workspaceId, slug])
+}
+
+model BoardList {
+  id        String   @id @default(cuid())
+  name      String
+  boardId   String
+  position  Int      @default(0)
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board     Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards     Card[]
+}
+
+model Card {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  listId      String
+  position    Int      @default(0)
+  status      String?
+  priority    String?
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  list         BoardList       @relation(fields: [listId], references: [id], onDelete: Cascade)
+  labels       CardLabel[]
+  customFields CardCustomField[]
+  comments     Comment[]
+  notes        Note[]
+  activities   Activity[]
+}
+
+model Label {
+  id    String @id @default(cuid())
+  name  String
+  color String
+
+  cards CardLabel[]
+}
+
+model CardLabel {
+  id      String @id @default(cuid())
+  cardId  String
+  labelId String
+
+  card  Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, labelId])
+}
+
+model CustomFieldDefinition {
+  id      String @id @default(cuid())
+  name    String
+  type    String @default("select") // text, select, number, date, boolean
+  options String? // JSON array for select options
+  boardId String?
+
+  values  CardCustomField[]
+}
+
+model CardCustomField {
+  id         String @id @default(cuid())
+  cardId     String
+  fieldId    String
+  value      String?
+
+  card  Card                  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  field CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, fieldId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  cardId    String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  card   Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String?
+  content   String
+  cardId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String   // card_created, comment_added, note_updated, status_changed, field_changed, description_changed
+  detail    String
+  cardId    String
+  userId    String?
+  createdAt DateTime @default(now())
+
+  card Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
