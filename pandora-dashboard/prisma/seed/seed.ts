@@ -58,6 +58,15 @@ const SEED_USERS = [
     active: true,
     workspaceAccess: ["sciglob", "nasa-gsfc"],
   },
+  {
+    username: "ashutosh.joshi",
+    fullName: "Ashutosh Joshi",
+    email: "ajoshi@sciglob.com",
+    password: "Ashu@123",
+    role: "admin",
+    active: true,
+    workspaceAccess: ["sciglob", "nasa-gsfc"],
+  },
 ];
 
 async function main() {
@@ -851,6 +860,30 @@ async function main() {
         },
       });
     }
+  }
+
+  // ── Attach ALL custom fields to EVERY card ──
+  // Ensure every card has a row for every custom field definition,
+  // filling in null for any that weren't explicitly seeded above.
+  const allCards = await prisma.card.findMany({ select: { id: true } });
+  const allFieldDefs = await prisma.customFieldDefinition.findMany({ select: { id: true } });
+  const existingCFs = await prisma.cardCustomField.findMany({
+    select: { cardId: true, fieldId: true },
+  });
+  const existingSet = new Set(existingCFs.map((cf) => `${cf.cardId}:${cf.fieldId}`));
+
+  const missingRows: { cardId: string; fieldId: string; value: null }[] = [];
+  for (const card of allCards) {
+    for (const field of allFieldDefs) {
+      if (!existingSet.has(`${card.id}:${field.id}`)) {
+        missingRows.push({ cardId: card.id, fieldId: field.id, value: null });
+      }
+    }
+  }
+
+  if (missingRows.length > 0) {
+    await prisma.cardCustomField.createMany({ data: missingRows });
+    console.log(`  Attached ${missingRows.length} missing custom field slots across ${allCards.length} cards`);
   }
 
   console.log("Seed complete!");

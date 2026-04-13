@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Search, Filter } from "lucide-react";
+import {
+  DragDropContext,
+  Droppable,
+  type DropResult,
+} from "@hello-pangea/dnd";
 import BoardColumn from "./BoardColumn";
 import CardDetailDrawer from "./CardDetailDrawer";
 
@@ -51,14 +57,22 @@ interface BoardViewProps {
 }
 
 export default function BoardView({ board, userRole }: BoardViewProps) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [labelFilter, setLabelFilter] = useState<string>("");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  // Local optimistic state for lists/cards during drag
+  const [localLists, setLocalLists] = useState<ListData[] | null>(null);
+
+  const canEdit = userRole === "admin" || userRole === "editor";
+
+  // Use localLists (optimistic) if available, otherwise server data
+  const listsSource = localLists ?? board.lists;
 
   // Collect all unique labels
   const allLabels = useMemo(() => {
     const map = new Map<string, Label>();
-    for (const list of board.lists) {
+    for (const list of listsSource) {
       for (const card of list.cards) {
         for (const cl of card.labels) {
           map.set(cl.label.id, cl.label);
@@ -66,11 +80,11 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
       }
     }
     return Array.from(map.values());
-  }, [board.lists]);
+  }, [listsSource]);
 
   // Filter cards
   const filteredLists = useMemo(() => {
-    return board.lists.map((list) => ({
+    return listsSource.map((list) => ({
       ...list,
       cards: list.cards.filter((card) => {
         const matchesSearch =
@@ -85,7 +99,71 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
         return matchesSearch && matchesLabel;
       }),
     }));
-  }, [board.lists, search, labelFilter]);
+  }, [listsSource, search, labelFilter]);
+
+  function handleCardCreated() {
+    router.refresh();
+  }
+
+  const handleDragEnd = useCallback(
+    async (result: DropResult) => {
+      const { source, destination, draggableId } = result;
+
+      if (!destination) return;
+      if (
+        source.droppableId === destination.droppableId &&
+        source.index === destination.index
+      ) {
+        return;
+      }
+
+      // Build optimistic update
+      const newLists = listsSource.map((list) => ({
+        ...list,
+        cards: [...list.cards],
+      }));
+
+      const sourceList = newLists.find((l) => l.id === source.droppableId);
+      const destList = newLists.find((l) => l.id === destination.droppableId);
+
+      if (!sourceList || !destList) return;
+
+      const [movedCard] = sourceList.cards.splice(source.index, 1);
+      if (!movedCard) return;
+
+      destList.cards.splice(destination.index, 0, movedCard);
+
+      // Reindex positions
+      sourceList.cards.forEach((c, i) => (c.position = i));
+      destList.cards.forEach((c, i) => (c.position = i));
+
+      setLocalLists(newLists);
+
+      try {
+        await fetch("/api/cards/reorder", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cardId: draggableId,
+            sourceListId: source.droppableId,
+            destinationListId: destination.droppableId,
+            newPosition: destination.index,
+          }),
+        });
+        router.refresh();
+      } catch {
+        // Revert on failure
+        setLocalLists(null);
+      }
+    },
+    [listsSource, router]
+  );
+
+  // Reset local state when server data updates
+  const boardListsKey = board.lists.map((l) => l.id + l.cards.length).join(",");
+  useMemo(() => {
+    setLocalLists(null);
+  }, [boardListsKey]);
 
   return (
     <>
@@ -131,24 +209,43 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
         )}
       </div>
 
-      {/* Board Columns */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-3 p-4 sm:p-6 min-h-[calc(100vh-12rem)]">
-          {filteredLists.map((list) => (
-            <BoardColumn
-              key={list.id}
-              list={list}
-              onCardClick={(cardId) => setSelectedCardId(cardId)}
-            />
-          ))}
+      {/* Board Columns with Drag & Drop */}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div className="flex gap-3 p-4 sm:p-6 min-h-[calc(100vh-12rem)]">
+            {filteredLists.map((list) => (
+              <Droppable key={list.id} droppableId={list.id}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`flex-shrink-0 w-72 rounded-xl transition-colors ${
+                      snapshot.isDraggingOver
+                        ? "bg-[#e8e6df]/50 ring-2 ring-[#3266ad]/20"
+                        : ""
+                    }`}
+                  >
+                    <BoardColumn
+                      list={list}
+                      canEdit={canEdit}
+                      onCardClick={(cardId) => setSelectedCardId(cardId)}
+                      onCardCreated={handleCardCreated}
+                      droppablePlaceholder={provided.placeholder}
+                    />
+                  </div>
+                )}
+              </Droppable>
+            ))}
+          </div>
         </div>
-      </div>
+      </DragDropContext>
 
       {/* Card Detail Drawer */}
       {selectedCardId && (
         <CardDetailDrawer
           cardId={selectedCardId}
           userRole={userRole}
+          boardLists={board.lists.map((l) => ({ id: l.id, name: l.name }))}
           onClose={() => setSelectedCardId(null)}
         />
       )}

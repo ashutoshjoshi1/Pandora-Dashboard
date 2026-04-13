@@ -15,8 +15,22 @@ import {
   Save,
   Loader2,
   Settings2,
+  Pencil,
+  ArrowRightLeft,
+  Check,
 } from "lucide-react";
 import { formatDateTime, getInitials } from "@/lib/utils";
+
+interface BoardListOption {
+  id: string;
+  name: string;
+}
+
+interface LabelOption {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface CardDetail {
   id: string;
@@ -54,6 +68,7 @@ interface CardDetail {
     user: { id: string; fullName: string; username: string } | null;
   }[];
   list: {
+    id: string;
     name: string;
     board: {
       name: string;
@@ -65,12 +80,14 @@ interface CardDetail {
 interface CardDetailDrawerProps {
   cardId: string;
   userRole: string;
+  boardLists?: BoardListOption[];
   onClose: () => void;
 }
 
 export default function CardDetailDrawer({
   cardId,
   userRole,
+  boardLists,
   onClose,
 }: CardDetailDrawerProps) {
   const router = useRouter();
@@ -83,9 +100,13 @@ export default function CardDetailDrawer({
   const [submitting, setSubmitting] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [showNewNote, setShowNewNote] = useState(false);
+  const [allLabels, setAllLabels] = useState<LabelOption[]>([]);
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
 
   const canEdit = userRole === "admin" || userRole === "editor";
 
@@ -104,6 +125,50 @@ export default function CardDetailDrawer({
   useEffect(() => {
     fetchCard();
   }, [fetchCard]);
+
+  useEffect(() => {
+    async function fetchLabels() {
+      const res = await fetch("/api/labels");
+      const data = await res.json();
+      if (data.success) setAllLabels(data.data);
+    }
+    fetchLabels();
+  }, []);
+
+  async function handleSaveTitle() {
+    if (!card || !titleDraft.trim()) return;
+    setSubmitting(true);
+    try {
+      await fetch(`/api/cards/${cardId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: titleDraft.trim() }),
+      });
+      setEditingTitle(false);
+      await fetchCard();
+      router.refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleToggleLabel(labelId: string, isActive: boolean) {
+    if (isActive) {
+      await fetch(`/api/cards/${cardId}/labels`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labelId }),
+      });
+    } else {
+      await fetch(`/api/cards/${cardId}/labels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labelId }),
+      });
+    }
+    await fetchCard();
+    router.refresh();
+  }
 
   async function handleAddComment() {
     if (!newComment.trim() || submitting) return;
@@ -135,6 +200,22 @@ export default function CardDetailDrawer({
         body: JSON.stringify({ description: descriptionDraft }),
       });
       setEditingDescription(false);
+      await fetchCard();
+      router.refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleMoveToList(newListId: string) {
+    if (!card || newListId === card.list.id) return;
+    setSubmitting(true);
+    try {
+      await fetch(`/api/cards/${cardId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: newListId }),
+      });
       await fetchCard();
       router.refresh();
     } finally {
@@ -206,14 +287,76 @@ export default function CardDetailDrawer({
         <div className="sticky top-0 bg-white border-b border-[#e8e6df] z-10">
           <div className="px-6 py-4 flex items-start justify-between">
             <div className="flex-1 min-w-0">
+              {/* List badge + Move */}
               <div className="flex items-center gap-2 text-[10px] text-[#888780] mb-1">
-                <span className="px-1.5 py-0.5 bg-[#f5f4f0] rounded text-[#5f5e5a] font-medium uppercase">
-                  {card.list.name}
-                </span>
+                {canEdit && boardLists && boardLists.length > 1 ? (
+                  <div className="flex items-center gap-1">
+                    <ArrowRightLeft className="w-3 h-3 text-[#b4b2a9]" />
+                    <select
+                      value={card.list.id}
+                      onChange={(e) => handleMoveToList(e.target.value)}
+                      className="text-[10px] bg-[#f5f4f0] rounded px-1.5 py-0.5 text-[#5f5e5a] font-medium uppercase border-none focus:outline-none focus:ring-1 focus:ring-[#3266ad]/30 cursor-pointer"
+                    >
+                      {boardLists.map((bl) => (
+                        <option key={bl.id} value={bl.id}>
+                          {bl.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <span className="px-1.5 py-0.5 bg-[#f5f4f0] rounded text-[#5f5e5a] font-medium uppercase">
+                    {card.list.name}
+                  </span>
+                )}
               </div>
-              <h2 className="text-lg font-medium text-[#1a1a18] truncate">
-                {card.title}
-              </h2>
+
+              {/* Editable Title */}
+              {editingTitle ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveTitle();
+                      if (e.key === "Escape") setEditingTitle(false);
+                    }}
+                    autoFocus
+                    className="flex-1 text-lg font-medium text-[#1a1a18] px-2 py-1 rounded border border-[#d3d1c7] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                  />
+                  <button
+                    onClick={handleSaveTitle}
+                    disabled={submitting || !titleDraft.trim()}
+                    className="p-1.5 bg-[#1a1a18] text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingTitle(false)}
+                    className="p-1.5 rounded-lg hover:bg-[#f5f4f0]"
+                  >
+                    <X className="w-3.5 h-3.5 text-[#888780]" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/title">
+                  <h2 className="text-lg font-medium text-[#1a1a18] truncate">
+                    {card.title}
+                  </h2>
+                  {canEdit && (
+                    <button
+                      onClick={() => {
+                        setEditingTitle(true);
+                        setTitleDraft(card.title);
+                      }}
+                      className="p-1 rounded hover:bg-[#f5f4f0] opacity-0 group-hover/title:opacity-100 transition"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#888780]" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -226,14 +369,26 @@ export default function CardDetailDrawer({
 
         <div className="px-6 py-4 space-y-6">
           {/* Labels */}
-          {card.labels.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a] mb-2">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a]">
                 <Tag className="w-3.5 h-3.5" />
                 Labels
               </div>
-              <div className="flex gap-1.5 flex-wrap">
-                {card.labels.map((cl) => (
+              {canEdit && (
+                <button
+                  onClick={() => setShowLabelPicker(!showLabelPicker)}
+                  className="text-xs text-[#3266ad] hover:underline"
+                >
+                  {showLabelPicker ? "Done" : "Edit"}
+                </button>
+              )}
+            </div>
+
+            {/* Current labels */}
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {card.labels.length > 0 ? (
+                card.labels.map((cl) => (
                   <span
                     key={cl.label.id}
                     className="inline-block text-xs font-medium px-2.5 py-1 rounded-md"
@@ -244,10 +399,40 @@ export default function CardDetailDrawer({
                   >
                     {cl.label.name}
                   </span>
-                ))}
-              </div>
+                ))
+              ) : (
+                <span className="text-xs text-[#b4b2a9] italic">No labels</span>
+              )}
             </div>
-          )}
+
+            {/* Label picker */}
+            {showLabelPicker && allLabels.length > 0 && (
+              <div className="grid grid-cols-2 gap-1.5 p-3 bg-[#fafaf8] rounded-lg border border-[#e8e6df]">
+                {allLabels.map((label) => {
+                  const isActive = card.labels.some(
+                    (cl) => cl.label.id === label.id
+                  );
+                  return (
+                    <button
+                      key={label.id}
+                      onClick={() => handleToggleLabel(label.id, isActive)}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition hover:opacity-80"
+                      style={{
+                        backgroundColor: label.color + (isActive ? "30" : "10"),
+                        color: label.color,
+                        border: isActive
+                          ? `2px solid ${label.color}`
+                          : "2px solid transparent",
+                      }}
+                    >
+                      {isActive && <Check className="w-3 h-3" />}
+                      {label.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Description */}
           <div>
@@ -304,13 +489,13 @@ export default function CardDetailDrawer({
             )}
           </div>
 
-          {/* Custom Fields */}
-          {card.customFields.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a] mb-2">
-                <Settings2 className="w-3.5 h-3.5" />
-                Custom Fields
-              </div>
+          {/* Custom Fields — always shown */}
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a] mb-2">
+              <Settings2 className="w-3.5 h-3.5" />
+              Custom Fields
+            </div>
+            {card.customFields.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {card.customFields.map((cf) => {
                   const options = cf.field.options
@@ -340,10 +525,20 @@ export default function CardDetailDrawer({
                             </option>
                           ))}
                         </select>
+                      ) : canEdit && !options ? (
+                        <input
+                          type="text"
+                          value={cf.value || ""}
+                          onChange={(e) =>
+                            handleUpdateCustomField(cf.field.id, e.target.value)
+                          }
+                          placeholder="Enter value..."
+                          className="w-full text-xs bg-transparent text-[#1a1a18] border-none p-0 focus:outline-none focus:ring-0 placeholder:text-[#b4b2a9]"
+                        />
                       ) : (
                         <div className="text-xs text-[#1a1a18] font-medium">
                           {cf.value || (
-                            <span className="text-[#b4b2a9]">—</span>
+                            <span className="text-[#b4b2a9]">&mdash;</span>
                           )}
                         </div>
                       )}
@@ -351,8 +546,12 @@ export default function CardDetailDrawer({
                   );
                 })}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-xs text-[#b4b2a9] italic bg-[#fafaf8] rounded-lg p-3 border border-[#e8e6df]">
+                No custom fields defined
+              </div>
+            )}
+          </div>
 
           {/* Timestamps */}
           <div className="flex gap-4 text-[10px] text-[#b4b2a9]">

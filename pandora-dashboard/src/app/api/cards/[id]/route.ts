@@ -36,6 +36,45 @@ export async function GET(
     return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
   }
 
+  // Ensure ALL custom field definitions are represented on the card.
+  // If a field definition exists but this card doesn't have a value for it,
+  // create the row with null so it shows in the UI.
+  const allFields = await prisma.customFieldDefinition.findMany();
+  const existingFieldIds = new Set(card.customFields.map((cf) => cf.fieldId));
+  const missingFields = allFields.filter((f) => !existingFieldIds.has(f.id));
+
+  if (missingFields.length > 0) {
+    await prisma.cardCustomField.createMany({
+      data: missingFields.map((f) => ({
+        cardId: id,
+        fieldId: f.id,
+        value: null,
+      })),
+    });
+
+    // Re-fetch to get the complete set
+    const updatedCard = await prisma.card.findUnique({
+      where: { id },
+      include: {
+        labels: { include: { label: true } },
+        customFields: { include: { field: true } },
+        comments: {
+          include: { author: { select: { id: true, fullName: true, username: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+        notes: { orderBy: { createdAt: "desc" } },
+        activities: {
+          include: { user: { select: { id: true, fullName: true, username: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
+        list: { include: { board: { include: { workspace: true } } } },
+      },
+    });
+
+    return NextResponse.json({ success: true, data: updatedCard });
+  }
+
   return NextResponse.json({ success: true, data: card });
 }
 
@@ -78,7 +117,11 @@ export async function PATCH(
   if (changes.length > 0) {
     await prisma.activity.create({
       data: {
-        type: changes.includes("status") ? "status_changed" : changes.includes("description") ? "description_changed" : "card_updated",
+        type: changes.includes("status")
+          ? "status_changed"
+          : changes.includes("description")
+            ? "description_changed"
+            : "card_updated",
         detail: `Updated ${changes.join(", ")}`,
         cardId: id,
         userId: user.id,

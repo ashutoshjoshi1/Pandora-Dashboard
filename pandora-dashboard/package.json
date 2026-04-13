@@ -4,15 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
-    "db:migrate": "npx prisma migrate dev",
-    "db:seed": "npx tsx prisma/seed/seed.ts",
-    "db:reset": "npx prisma migrate reset --force && npx tsx prisma/seed/seed.ts",
-    "db:studio": "npx prisma studio"
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed/seed.ts",
+    "db:reset": "prisma migrate reset --force && tsx prisma/seed/seed.ts",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
