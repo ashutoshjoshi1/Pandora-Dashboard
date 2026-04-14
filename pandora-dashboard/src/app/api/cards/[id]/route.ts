@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUser, requireRole } from "@/lib/auth";
+import { logActivity } from "@/lib/activity-log";
+import { notifyAdminsOfDeletion } from "@/lib/mail";
 
 export async function GET(
   _request: NextRequest,
@@ -33,7 +35,7 @@ export async function GET(
     },
   });
 
-  if (!card) {
+  if (!card || card.deletedAt) {
     return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
   }
 
@@ -93,7 +95,7 @@ export async function PATCH(
   const { title, description, status, priority, listId } = body;
 
   const existing = await prisma.card.findUnique({ where: { id } });
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
   }
 
@@ -144,12 +146,36 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const existing = await prisma.card.findUnique({ where: { id } });
-  if (!existing) {
+  const existing = await prisma.card.findUnique({
+    where: { id },
+    include: { list: { include: { board: { include: { workspace: true } } } } },
+  });
+  if (!existing || existing.deletedAt) {
     return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
   }
 
-  await prisma.card.delete({ where: { id } });
+  await prisma.card.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedBy: user.id },
+  });
+
+  const detail = `Card "${existing.title}" in ${existing.list.board.workspace.name} / ${existing.list.board.name} moved to trash`;
+
+  await logActivity({
+    action: "card_deleted",
+    entityType: "card",
+    entityId: id,
+    entityName: existing.title,
+    detail,
+    userId: user.id,
+  });
+
+  notifyAdminsOfDeletion({
+    entityType: "card",
+    entityName: existing.title,
+    deletedByName: user.fullName,
+    detail: `Workspace: ${existing.list.board.workspace.name} / Board: ${existing.list.board.name}`,
+  });
 
   return NextResponse.json({ success: true });
 }

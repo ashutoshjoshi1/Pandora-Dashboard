@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   // Get highest position in the list
   const lastCard = await prisma.card.findFirst({
-    where: { listId },
+    where: { listId, deletedAt: null },
     orderBy: { position: "desc" },
     select: { position: true },
   });

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FlaskConical, LogOut, Settings, Users, ChevronRight } from "lucide-react";
+import { FlaskConical, LogOut, Settings, Users, ChevronRight, Trash2, Activity } from "lucide-react";
 import { getInitials } from "@/lib/utils";
 
 interface AppHeaderProps {
@@ -64,13 +64,29 @@ export default function AppHeader({ user, breadcrumbs }: AppHeaderProps) {
 
         <div className="flex items-center gap-2">
           {user.role === "admin" && (
-            <Link
-              href="/admin/users"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#5f5e5a] hover:bg-[#f5f4f0] transition"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Users</span>
-            </Link>
+            <>
+              <Link
+                href="/admin/users"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#5f5e5a] hover:bg-[#f5f4f0] transition"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Users</span>
+              </Link>
+              <Link
+                href="/admin/trash"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#5f5e5a] hover:bg-[#f5f4f0] transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Trash</span>
+              </Link>
+              <Link
+                href="/admin/activity"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#5f5e5a] hover:bg-[#f5f4f0] transition"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Activity</span>
+              </Link>
+            </>
           )}
 
           <Link

@@ -21,6 +21,7 @@ export async function GET(
           lists: {
             include: {
               cards: {
+                where: { deletedAt: null },
                 include: {
                   labels: { include: { label: true } },
                   jobs: true,
@@ -33,7 +34,7 @@ export async function GET(
     },
   });
 
-  if (!workspace) {
+  if (!workspace || workspace.deletedAt) {
     return NextResponse.json({ success: false, error: "Workspace not found" }, { status: 404 });
   }
 

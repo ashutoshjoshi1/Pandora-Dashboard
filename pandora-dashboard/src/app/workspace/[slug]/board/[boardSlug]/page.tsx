@@ -17,7 +17,7 @@ export default async function BoardPage({ params }: Props) {
   const workspace = await prisma.workspace.findUnique({
     where: { slug },
   });
-  if (!workspace) notFound();
+  if (!workspace || workspace.deletedAt) notFound();
 
   const board = await prisma.board.findUnique({
     where: { workspaceId_slug: { workspaceId: workspace.id, slug: boardSlug } },
@@ -26,6 +26,7 @@ export default async function BoardPage({ params }: Props) {
         orderBy: { position: "asc" },
         include: {
           cards: {
+            where: { deletedAt: null },
             orderBy: { position: "asc" },
             include: {
               labels: { include: { label: true } },

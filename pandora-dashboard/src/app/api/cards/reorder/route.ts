@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const card = await prisma.card.findUnique({ where: { id: cardId } });
-  if (!card) {
+  if (!card || card.deletedAt) {
     return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
   }
 

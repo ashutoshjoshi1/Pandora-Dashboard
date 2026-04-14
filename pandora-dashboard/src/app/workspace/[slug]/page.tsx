@@ -20,7 +20,11 @@ export default async function WorkspacePage({ params }: Props) {
       boards: {
         include: {
           lists: {
-            include: { _count: { select: { cards: true } } },
+            include: {
+              _count: {
+                select: { cards: { where: { deletedAt: null } } },
+              },
+            },
             orderBy: { position: "asc" },
           },
         },
@@ -29,7 +33,7 @@ export default async function WorkspacePage({ params }: Props) {
     },
   });
 
-  if (!workspace) notFound();
+  if (!workspace || workspace.deletedAt) notFound();
 
   return (
     <div className="min-h-screen bg-[#f5f4f0]">

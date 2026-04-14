@@ -11,11 +11,16 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   const workspaces = await prisma.workspace.findMany({
+    where: { deletedAt: null },
     include: {
       boards: {
         include: {
           lists: {
-            include: { _count: { select: { cards: true } } },
+            include: {
+              _count: {
+                select: { cards: { where: { deletedAt: null } } },
+              },
+            },
           },
         },
       },

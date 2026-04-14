@@ -22,20 +22,26 @@ model User {
   activities    Activity[]
   workspaceAccess UserWorkspaceAccess[]
   completedJobs CardJob[]
+  deletedCards     Card[]      @relation("CardDeletedBy")
+  deletedWorkspaces Workspace[] @relation("WorkspaceDeletedBy")
+  activityLogs  ActivityLog[]
 }
 
 model Workspace {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  slug        String   @unique
+  slug        String    @unique
   description String?
-  color       String   @default("#3266ad")
+  color       String    @default("#3266ad")
   icon        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   boards      Board[]
   userAccess  UserWorkspaceAccess[]
+  deletedByUser User?   @relation("WorkspaceDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
 }
 
 model UserWorkspaceAccess {
@@ -81,17 +87,19 @@ model BoardList {
 }
 
 model Card {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   description String?
   listId      String
-  position    Int      @default(0)
+  position    Int       @default(0)
   status      String?
   priority    String?
   dueDate     DateTime?
-  type        String?  // "build" | "repair" | null (legacy cards)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  type        String?   // "build" | "repair" | null (legacy cards)
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   list         BoardList       @relation(fields: [listId], references: [id], onDelete: Cascade)
   labels       CardLabel[]
@@ -100,6 +108,7 @@ model Card {
   notes        Note[]
   activities   Activity[]
   jobs         CardJob[]
+  deletedByUser User?   @relation("CardDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
 }
 
 model CardJob {
@@ -189,5 +198,18 @@ model Activity {
   createdAt DateTime @default(now())
 
   card Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // card_deleted, card_restored, workspace_deleted, workspace_restored, card_permanently_deleted, workspace_permanently_deleted
+  entityType  String   // card, workspace
+  entityId    String
+  entityName  String
+  detail      String
+  userId      String?
+  createdAt   DateTime @default(now())
+
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
