@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { MessageSquare, StickyNote, Plus, X, Loader2, GripVertical } from "lucide-react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import {
+  MessageSquare,
+  StickyNote,
+  Plus,
+  X,
+  Loader2,
+  GripVertical,
+  Pencil,
+  Trash2,
+  Check,
+} from "lucide-react";
 import { Draggable } from "@hello-pangea/dnd";
 
 interface Label {
@@ -29,21 +39,77 @@ interface ListData {
 interface BoardColumnProps {
   list: ListData;
   canEdit: boolean;
+  isAdmin: boolean;
   onCardClick: (cardId: string) => void;
   onCardCreated: () => void;
+  onListUpdated: () => void;
   droppablePlaceholder?: ReactNode;
 }
 
 export default function BoardColumn({
   list,
   canEdit,
+  isAdmin,
   onCardClick,
   onCardCreated,
+  onListUpdated,
   droppablePlaceholder,
 }: BoardColumnProps) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState("");
   const [creating, setCreating] = useState(false);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(list.name);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  async function handleRename() {
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === list.name) {
+      setEditName(list.name);
+      setIsEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/lists/${list.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsEditing(false);
+        onListUpdated();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/lists/${list.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        onListUpdated();
+      }
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
 
   async function handleCreateCard() {
     if (!newCardTitle.trim() || creating) return;
@@ -68,17 +134,92 @@ export default function BoardColumn({
   return (
     <div className="flex flex-col max-h-[calc(100vh-14rem)]">
       {/* Column Header */}
-      <div className="flex items-center gap-2 px-3 py-2 mb-1">
+      <div className="flex items-center gap-2 px-3 py-2 mb-1 group/header">
         <div
           className="w-2 h-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: list.color || "#888780" }}
         />
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#5f5e5a] truncate">
-          {list.name}
-        </h3>
-        <span className="text-[10px] bg-[#e8e6df] text-[#888780] rounded-full px-1.5 py-0.5 font-medium flex-shrink-0">
-          {list.cards.length}
-        </span>
+
+        {isEditing ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRename();
+                if (e.key === "Escape") {
+                  setEditName(list.name);
+                  setIsEditing(false);
+                }
+              }}
+              onBlur={handleRename}
+              disabled={saving}
+              className="flex-1 min-w-0 text-xs font-semibold uppercase tracking-wider text-[#5f5e5a] bg-white border border-[#d3d1c7] rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+            />
+            <button
+              onClick={handleRename}
+              disabled={saving}
+              className="p-0.5 rounded hover:bg-[#e8e6df] transition"
+            >
+              <Check className="w-3 h-3 text-[#5f5e5a]" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#5f5e5a] truncate">
+              {list.name}
+            </h3>
+            <span className="text-[10px] bg-[#e8e6df] text-[#888780] rounded-full px-1.5 py-0.5 font-medium flex-shrink-0">
+              {list.cards.length}
+            </span>
+
+            {canEdit && (
+              <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover/header:opacity-100 transition-opacity">
+                <button
+                  onClick={() => {
+                    setEditName(list.name);
+                    setIsEditing(true);
+                  }}
+                  className="p-1 rounded hover:bg-[#e8e6df] transition"
+                  title="Rename column"
+                >
+                  <Pencil className="w-3 h-3 text-[#888780]" />
+                </button>
+                {isAdmin && (
+                  <>
+                    {showDeleteConfirm ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          className="px-1.5 py-0.5 text-[10px] font-medium bg-red-500 text-white rounded hover:bg-red-600 transition disabled:opacity-50"
+                        >
+                          {deleting ? "..." : "Delete"}
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="p-0.5 rounded hover:bg-[#e8e6df] transition"
+                        >
+                          <X className="w-3 h-3 text-[#888780]" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="p-1 rounded hover:bg-red-50 transition"
+                        title="Delete column"
+                      >
+                        <Trash2 className="w-3 h-3 text-[#888780] hover:text-red-500" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Cards */}

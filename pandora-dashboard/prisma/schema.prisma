@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -21,6 +21,7 @@ model User {
   comments      Comment[]
   activities    Activity[]
   workspaceAccess UserWorkspaceAccess[]
+  completedJobs CardJob[]
 }
 
 model Workspace {
@@ -88,6 +89,7 @@ model Card {
   status      String?
   priority    String?
   dueDate     DateTime?
+  type        String?  // "build" | "repair" | null (legacy cards)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -97,6 +99,21 @@ model Card {
   comments     Comment[]
   notes        Note[]
   activities   Activity[]
+  jobs         CardJob[]
+}
+
+model CardJob {
+  id          String    @id @default(cuid())
+  cardId      String
+  name        String
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  completedBy String?
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  card Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [completedBy], references: [id], onDelete: SetNull)
 }
 
 model Label {

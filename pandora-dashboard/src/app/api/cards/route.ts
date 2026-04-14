@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { title, description, listId } = body;
+  const { title, description, listId, type } = body;
 
   if (!title?.trim() || !listId) {
     return NextResponse.json(
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       description: description?.trim() || null,
       listId,
       position: nextPosition,
+      ...(type && { type }),
     },
   });
 

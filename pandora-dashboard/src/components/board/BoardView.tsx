@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, Plus, X, Loader2 } from "lucide-react";
 import {
   DragDropContext,
   Droppable,
@@ -64,7 +64,36 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
   // Local optimistic state for lists/cards during drag
   const [localLists, setLocalLists] = useState<ListData[] | null>(null);
 
+  const [showAddColumn, setShowAddColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState("");
+  const [creatingColumn, setCreatingColumn] = useState(false);
+
   const canEdit = userRole === "admin" || userRole === "editor";
+  const isAdmin = userRole === "admin";
+
+  async function handleCreateColumn() {
+    if (!newColumnName.trim() || creatingColumn) return;
+    setCreatingColumn(true);
+    try {
+      const res = await fetch("/api/lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newColumnName.trim(), boardId: board.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewColumnName("");
+        setShowAddColumn(false);
+        router.refresh();
+      }
+    } finally {
+      setCreatingColumn(false);
+    }
+  }
+
+  function handleListUpdated() {
+    router.refresh();
+  }
 
   // Use localLists (optimistic) if available, otherwise server data
   const listsSource = localLists ?? board.lists;
@@ -228,14 +257,72 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
                     <BoardColumn
                       list={list}
                       canEdit={canEdit}
+                      isAdmin={isAdmin}
                       onCardClick={(cardId) => setSelectedCardId(cardId)}
                       onCardCreated={handleCardCreated}
+                      onListUpdated={handleListUpdated}
                       droppablePlaceholder={provided.placeholder}
                     />
                   </div>
                 )}
               </Droppable>
             ))}
+
+            {/* Add Column */}
+            {canEdit && (
+              <div className="flex-shrink-0 w-72">
+                {showAddColumn ? (
+                  <div className="bg-white rounded-xl border border-[#d3d1c7] p-3 space-y-2 shadow-sm">
+                    <input
+                      type="text"
+                      value={newColumnName}
+                      onChange={(e) => setNewColumnName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateColumn();
+                        if (e.key === "Escape") {
+                          setShowAddColumn(false);
+                          setNewColumnName("");
+                        }
+                      }}
+                      placeholder="Column name..."
+                      autoFocus
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-[#d3d1c7] text-sm text-[#1a1a18] placeholder:text-[#b4b2a9] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCreateColumn}
+                        disabled={!newColumnName.trim() || creatingColumn}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-[#1a1a18] text-white text-xs rounded-lg hover:bg-[#2a2a28] disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        {creatingColumn ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Plus className="w-3 h-3" />
+                        )}
+                        Add Column
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddColumn(false);
+                          setNewColumnName("");
+                        }}
+                        className="p-1.5 rounded hover:bg-[#f5f4f0] transition"
+                      >
+                        <X className="w-4 h-4 text-[#888780]" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAddColumn(true)}
+                    className="w-full flex items-center justify-center gap-1.5 px-4 py-3 text-xs font-medium text-[#888780] hover:text-[#1a1a18] bg-[#e8e6df]/40 hover:bg-[#e8e6df]/70 border border-dashed border-[#d3d1c7] rounded-xl transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add column
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </DragDropContext>
@@ -247,6 +334,10 @@ export default function BoardView({ board, userRole }: BoardViewProps) {
           userRole={userRole}
           boardLists={board.lists.map((l) => ({ id: l.id, name: l.name }))}
           onClose={() => setSelectedCardId(null)}
+          onDeleted={() => {
+            setSelectedCardId(null);
+            router.refresh();
+          }}
         />
       )}
     </>

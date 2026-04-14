@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import AppHeader from "@/components/layout/AppHeader";
 import { FlaskConical, Satellite, ArrowRight, BarChart3, Clock, Layers } from "lucide-react";
+import DashboardClient from "@/components/workspace/DashboardClient";
 
 export default async function DashboardPage() {
   const user = await getUser();
@@ -80,9 +81,12 @@ export default async function DashboardPage() {
         </div>
 
         {/* Workspace Selection Cards */}
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-[#888780] mb-4 px-1">
-          Select Workspace
-        </h2>
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#888780]">
+            Select Workspace
+          </h2>
+          <DashboardClient isAdmin={user.role === "admin"} />
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {workspaces.map((ws) => {

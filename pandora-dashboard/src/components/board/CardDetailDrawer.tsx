@@ -18,6 +18,8 @@ import {
   Pencil,
   ArrowRightLeft,
   Check,
+  Trash2,
+  ListChecks,
 } from "lucide-react";
 import { formatDateTime, getInitials } from "@/lib/utils";
 
@@ -32,12 +34,21 @@ interface LabelOption {
   color: string;
 }
 
+interface CardJob {
+  id: string;
+  name: string;
+  completed: boolean;
+  completedAt: string | null;
+  user: { id: string; fullName: string } | null;
+}
+
 interface CardDetail {
   id: string;
   title: string;
   description: string | null;
   status: string | null;
   priority: string | null;
+  type: string | null;
   createdAt: string;
   updatedAt: string;
   labels: { label: { id: string; name: string; color: string } }[];
@@ -67,6 +78,7 @@ interface CardDetail {
     createdAt: string;
     user: { id: string; fullName: string; username: string } | null;
   }[];
+  jobs: CardJob[];
   list: {
     id: string;
     name: string;
@@ -82,6 +94,7 @@ interface CardDetailDrawerProps {
   userRole: string;
   boardLists?: BoardListOption[];
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
 export default function CardDetailDrawer({
@@ -89,6 +102,7 @@ export default function CardDetailDrawer({
   userRole,
   boardLists,
   onClose,
+  onDeleted,
 }: CardDetailDrawerProps) {
   const router = useRouter();
   const [card, setCard] = useState<CardDetail | null>(null);
@@ -107,6 +121,7 @@ export default function CardDetailDrawer({
   const [showNewNote, setShowNewNote] = useState(false);
   const [allLabels, setAllLabels] = useState<LabelOption[]>([]);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const canEdit = userRole === "admin" || userRole === "editor";
 
@@ -257,6 +272,31 @@ export default function CardDetailDrawer({
     await fetchCard();
   }
 
+  async function handleToggleJob(jobId: string, completed: boolean) {
+    await fetch(`/api/cards/${cardId}/jobs`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId, completed }),
+    });
+    await fetchCard();
+  }
+
+  async function handleDeleteCard() {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/cards/${cardId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        onDeleted?.();
+        onClose();
+        router.refresh();
+      }
+    } finally {
+      setSubmitting(false);
+      setConfirmingDelete(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
@@ -358,12 +398,42 @@ export default function CardDetailDrawer({
                 </div>
               )}
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-[#f5f4f0] transition ml-2 flex-shrink-0"
-            >
-              <X className="w-5 h-5 text-[#888780]" />
-            </button>
+            <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+              {canEdit && (
+                confirmingDelete ? (
+                  <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                    <span className="text-xs text-red-600 font-medium">Delete?</span>
+                    <button
+                      onClick={handleDeleteCard}
+                      disabled={submitting}
+                      className="px-2 py-0.5 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDelete(false)}
+                      className="px-2 py-0.5 text-xs text-red-600 hover:text-red-800"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingDelete(true)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 transition group"
+                    title="Delete card"
+                  >
+                    <Trash2 className="w-4 h-4 text-[#b4b2a9] group-hover:text-red-500" />
+                  </button>
+                )
+              )}
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg hover:bg-[#f5f4f0] transition"
+              >
+                <X className="w-5 h-5 text-[#888780]" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -552,6 +622,68 @@ export default function CardDetailDrawer({
               </div>
             )}
           </div>
+
+          {/* Jobs Checklist */}
+          {card.jobs && card.jobs.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a]">
+                  <ListChecks className="w-3.5 h-3.5" />
+                  Job Checklist
+                </div>
+                <span className="text-[10px] text-[#888780] font-medium">
+                  {card.jobs.filter((j) => j.completed).length}/{card.jobs.length} done
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-[#e8e6df] rounded-full h-1.5 mb-3">
+                <div
+                  className="h-1.5 rounded-full bg-[#2a7a4a] transition-all duration-300"
+                  style={{
+                    width: `${card.jobs.length > 0 ? (card.jobs.filter((j) => j.completed).length / card.jobs.length) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                {card.jobs.map((job) => (
+                  <button
+                    key={job.id}
+                    onClick={() => canEdit && handleToggleJob(job.id, !job.completed)}
+                    disabled={!canEdit}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition ${
+                      job.completed
+                        ? "bg-[#f0fff5] border border-[#c8e6d0]"
+                        : "bg-[#fafaf8] border border-[#e8e6df] hover:border-[#d3d1c7]"
+                    } ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <div
+                      className={`w-4.5 h-4.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
+                        job.completed
+                          ? "bg-[#2a7a4a] border-[#2a7a4a]"
+                          : "border-[#d3d1c7]"
+                      }`}
+                    >
+                      {job.completed && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <span
+                      className={`flex-1 ${
+                        job.completed
+                          ? "text-[#888780] line-through"
+                          : "text-[#1a1a18]"
+                      }`}
+                    >
+                      {job.name}
+                    </span>
+                    {job.completed && job.user && (
+                      <span className="text-[10px] text-[#b4b2a9]">
+                        {job.user.fullName}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Timestamps */}
           <div className="flex gap-4 text-[10px] text-[#b4b2a9]">

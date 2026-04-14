@@ -29,6 +29,7 @@ export async function GET(
         take: 50,
       },
       list: { include: { board: { include: { workspace: true } } } },
+      jobs: { orderBy: { position: "asc" }, include: { user: { select: { id: true, fullName: true } } } },
     },
   });
 
@@ -130,4 +131,25 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true, data: card });
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getUser();
+  if (!user || !requireRole(user.role, "editor")) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  const existing = await prisma.card.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ success: false, error: "Card not found" }, { status: 404 });
+  }
+
+  await prisma.card.delete({ where: { id } });
+
+  return NextResponse.json({ success: true });
 }
