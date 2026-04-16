@@ -20,6 +20,15 @@ import {
   Check,
   Trash2,
   ListChecks,
+  Paperclip,
+  CalendarDays,
+  Flag,
+  ExternalLink,
+  FileSpreadsheet,
+  Presentation,
+  FolderOpen,
+  Link2,
+  AlertCircle,
 } from "lucide-react";
 import { formatDateTime, getInitials } from "@/lib/utils";
 
@@ -42,6 +51,15 @@ interface CardJob {
   user: { id: string; fullName: string } | null;
 }
 
+interface CardAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  createdAt: string;
+  addedBy: { id: string; fullName: string; username: string };
+}
+
 interface CardDetail {
   id: string;
   title: string;
@@ -49,6 +67,7 @@ interface CardDetail {
   status: string | null;
   priority: string | null;
   type: string | null;
+  dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   labels: { label: { id: string; name: string; color: string } }[];
@@ -78,6 +97,7 @@ interface CardDetail {
     createdAt: string;
     user: { id: string; fullName: string; username: string } | null;
   }[];
+  attachments: CardAttachment[];
   jobs: CardJob[];
   list: {
     id: string;
@@ -107,7 +127,7 @@ export default function CardDetailDrawer({
   const router = useRouter();
   const [card, setCard] = useState<CardDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"comments" | "notes" | "activity">(
+  const [activeTab, setActiveTab] = useState<"comments" | "notes" | "activity" | "documents">(
     "comments"
   );
   const [newComment, setNewComment] = useState("");
@@ -122,6 +142,9 @@ export default function CardDetailDrawer({
   const [allLabels, setAllLabels] = useState<LabelOption[]>([]);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [showAttachmentForm, setShowAttachmentForm] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentName, setAttachmentName] = useState("");
 
   const canEdit = userRole === "admin" || userRole === "editor";
 
@@ -279,6 +302,122 @@ export default function CardDetailDrawer({
       body: JSON.stringify({ jobId, completed }),
     });
     await fetchCard();
+  }
+
+  async function handleUpdateStatus(status: string) {
+    if (!card) return;
+    await fetch(`/api/cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    await fetchCard();
+    router.refresh();
+  }
+
+  async function handleUpdatePriority(priority: string) {
+    if (!card) return;
+    await fetch(`/api/cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority }),
+    });
+    await fetchCard();
+    router.refresh();
+  }
+
+  async function handleUpdateDueDate(dateStr: string) {
+    if (!card) return;
+    await fetch(`/api/cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dueDate: dateStr || null }),
+    });
+    await fetchCard();
+    router.refresh();
+  }
+
+  async function handleAddAttachment() {
+    if (!attachmentUrl.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/cards/${cardId}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: attachmentUrl.trim(),
+          name: attachmentName.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAttachmentUrl("");
+        setAttachmentName("");
+        setShowAttachmentForm(false);
+        await fetchCard();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteAttachment(attachmentId: string) {
+    await fetch(`/api/cards/${cardId}/attachments`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attachmentId }),
+    });
+    await fetchCard();
+  }
+
+  function getAttachmentIcon(type: string) {
+    switch (type) {
+      case "google_doc":
+        return <FileText className="w-4 h-4 text-blue-600" />;
+      case "google_sheet":
+        return <FileSpreadsheet className="w-4 h-4 text-green-600" />;
+      case "google_slide":
+        return <Presentation className="w-4 h-4 text-amber-600" />;
+      case "google_drive":
+        return <FolderOpen className="w-4 h-4 text-yellow-600" />;
+      default:
+        return <Link2 className="w-4 h-4 text-[#888780]" />;
+    }
+  }
+
+  function getPriorityColor(priority: string | null) {
+    switch (priority) {
+      case "urgent":
+        return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" };
+      case "high":
+        return { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" };
+      case "medium":
+        return { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" };
+      case "low":
+        return { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" };
+      default:
+        return { bg: "bg-[#f5f4f0]", text: "text-[#888780]", border: "border-[#e8e6df]" };
+    }
+  }
+
+  function getStatusColor(status: string | null) {
+    switch (status) {
+      case "done":
+        return { bg: "bg-emerald-50", text: "text-emerald-700" };
+      case "in_progress":
+        return { bg: "bg-blue-50", text: "text-blue-700" };
+      case "review":
+        return { bg: "bg-purple-50", text: "text-purple-700" };
+      case "blocked":
+        return { bg: "bg-red-50", text: "text-red-700" };
+      default:
+        return { bg: "bg-[#f5f4f0]", text: "text-[#888780]" };
+    }
+  }
+
+  function isDueDateOverdue(dueDate: string | null) {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date() && card?.status !== "done";
   }
 
   async function handleDeleteCard() {
@@ -486,6 +625,78 @@ export default function CardDetailDrawer({
             )}
           </div>
 
+          {/* Status · Priority · Due Date row */}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Status */}
+            <div className="bg-[#fafaf8] rounded-lg px-3 py-2.5 border border-[#e8e6df]">
+              <div className="text-[10px] text-[#888780] font-medium mb-1.5 uppercase tracking-wider">Status</div>
+              {canEdit ? (
+                <select
+                  value={card.status || ""}
+                  onChange={(e) => handleUpdateStatus(e.target.value)}
+                  className={`w-full text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 cursor-pointer ${getStatusColor(card.status).text}`}
+                >
+                  <option value="">Not set</option>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="done">Done</option>
+                </select>
+              ) : (
+                <div className={`text-xs font-medium ${getStatusColor(card.status).text}`}>
+                  {card.status?.replace("_", " ") || "Not set"}
+                </div>
+              )}
+            </div>
+
+            {/* Priority */}
+            <div className="bg-[#fafaf8] rounded-lg px-3 py-2.5 border border-[#e8e6df]">
+              <div className="text-[10px] text-[#888780] font-medium mb-1.5 uppercase tracking-wider">Priority</div>
+              {canEdit ? (
+                <div className="flex items-center gap-1.5">
+                  <Flag className={`w-3 h-3 ${getPriorityColor(card.priority).text}`} />
+                  <select
+                    value={card.priority || ""}
+                    onChange={(e) => handleUpdatePriority(e.target.value)}
+                    className={`flex-1 text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 cursor-pointer ${getPriorityColor(card.priority).text}`}
+                  >
+                    <option value="">None</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-1.5 text-xs font-medium ${getPriorityColor(card.priority).text}`}>
+                  <Flag className="w-3 h-3" />
+                  {card.priority || "None"}
+                </div>
+              )}
+            </div>
+
+            {/* Due Date */}
+            <div className={`rounded-lg px-3 py-2.5 border ${isDueDateOverdue(card.dueDate) ? "bg-red-50 border-red-200" : "bg-[#fafaf8] border-[#e8e6df]"}`}>
+              <div className="text-[10px] text-[#888780] font-medium mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                Due Date
+                {isDueDateOverdue(card.dueDate) && <AlertCircle className="w-3 h-3 text-red-500" />}
+              </div>
+              {canEdit ? (
+                <input
+                  type="date"
+                  value={card.dueDate ? new Date(card.dueDate).toISOString().split("T")[0] : ""}
+                  onChange={(e) => handleUpdateDueDate(e.target.value)}
+                  className={`w-full text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 cursor-pointer ${isDueDateOverdue(card.dueDate) ? "text-red-700" : "text-[#1a1a18]"}`}
+                />
+              ) : (
+                <div className={`text-xs font-medium ${isDueDateOverdue(card.dueDate) ? "text-red-700" : "text-[#1a1a18]"}`}>
+                  {card.dueDate ? new Date(card.dueDate).toLocaleDateString() : "Not set"}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Description */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -667,6 +878,132 @@ export default function CardDetailDrawer({
             </div>
           )}
 
+          {/* Attachments & Documents */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-[#5f5e5a]">
+                <Paperclip className="w-3.5 h-3.5" />
+                Attachments & Documents
+                {card.attachments && card.attachments.length > 0 && (
+                  <span className="text-[10px] bg-[#e8e6df] rounded-full px-1.5 text-[#888780]">
+                    {card.attachments.length}
+                  </span>
+                )}
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => setShowAttachmentForm(!showAttachmentForm)}
+                  className="flex items-center gap-1 text-xs text-[#3266ad] hover:underline"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add
+                </button>
+              )}
+            </div>
+
+            {/* Add Attachment Form */}
+            {showAttachmentForm && (
+              <div className="mb-3 p-3 bg-[#fafaf8] rounded-lg border border-[#e8e6df] space-y-2">
+                <input
+                  type="url"
+                  value={attachmentUrl}
+                  onChange={(e) => setAttachmentUrl(e.target.value)}
+                  placeholder="Paste a Google Docs, Sheets, or any URL..."
+                  className="w-full px-2.5 py-1.5 rounded border border-[#d3d1c7] text-sm text-[#1a1a18] placeholder:text-[#b4b2a9] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                />
+                <input
+                  type="text"
+                  value={attachmentName}
+                  onChange={(e) => setAttachmentName(e.target.value)}
+                  placeholder="Display name (optional, auto-detected)"
+                  className="w-full px-2.5 py-1.5 rounded border border-[#d3d1c7] text-sm text-[#1a1a18] placeholder:text-[#b4b2a9] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddAttachment}
+                    disabled={!attachmentUrl.trim() || submitting}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-[#1a1a18] text-white text-xs rounded-lg hover:bg-[#2a2a28] disabled:opacity-50"
+                  >
+                    {submitting ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Paperclip className="w-3 h-3" />
+                    )}
+                    Attach
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAttachmentForm(false);
+                      setAttachmentUrl("");
+                      setAttachmentName("");
+                    }}
+                    className="px-3 py-1.5 text-xs text-[#888780] hover:text-[#1a1a18]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#b4b2a9]">
+                  Supports Google Docs, Sheets, Slides, Drive links, and any URL
+                </p>
+              </div>
+            )}
+
+            {/* Attachment List */}
+            {card.attachments && card.attachments.length > 0 ? (
+              <div className="space-y-1.5">
+                {card.attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#fafaf8] border border-[#e8e6df] group hover:border-[#d3d1c7] transition"
+                  >
+                    <div className="flex-shrink-0">{getAttachmentIcon(att.type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-[#1a1a18] hover:text-[#3266ad] hover:underline truncate block"
+                      >
+                        {att.name}
+                      </a>
+                      <div className="flex items-center gap-2 text-[10px] text-[#b4b2a9]">
+                        <span className="capitalize">{att.type.replace(/_/g, " ")}</span>
+                        <span>&middot;</span>
+                        <span>{att.addedBy.fullName}</span>
+                        <span>&middot;</span>
+                        <span>{formatDateTime(att.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded hover:bg-[#e8e6df] transition"
+                        title="Open in new tab"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-[#888780]" />
+                      </a>
+                      {canEdit && (
+                        <button
+                          onClick={() => handleDeleteAttachment(att.id)}
+                          className="p-1.5 rounded hover:bg-red-50 transition"
+                          title="Remove attachment"
+                        >
+                          <X className="w-3.5 h-3.5 text-[#b4b2a9] hover:text-red-500" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !showAttachmentForm ? (
+              <div className="text-xs text-[#b4b2a9] italic bg-[#fafaf8] rounded-lg p-3 border border-[#e8e6df]">
+                No attachments — attach Google Docs, Sheets, or any link
+              </div>
+            ) : null}
+          </div>
+
           {/* Timestamps */}
           <div className="flex gap-4 text-[10px] text-[#b4b2a9]">
             <span className="flex items-center gap-1">
@@ -692,6 +1029,12 @@ export default function CardDetailDrawer({
                     icon: StickyNote,
                     label: "Notes",
                     count: card.notes.length,
+                  },
+                  {
+                    key: "documents" as const,
+                    icon: FileText,
+                    label: "Docs",
+                    count: card.attachments?.filter((a) => a.type.startsWith("google_")).length || 0,
                   },
                   {
                     key: "activity" as const,
@@ -854,6 +1197,57 @@ export default function CardDetailDrawer({
                     </div>
                   ))
                 )}
+              </div>
+            )}
+
+            {/* Documents Tab — embedded Google Docs viewer */}
+            {activeTab === "documents" && (
+              <div className="space-y-3">
+                {(() => {
+                  const googleDocs = card.attachments?.filter((a) =>
+                    a.type.startsWith("google_")
+                  ) || [];
+                  if (googleDocs.length === 0) {
+                    return (
+                      <p className="text-xs text-[#b4b2a9] text-center py-4 italic">
+                        No Google Documents attached — add one from the Attachments section above
+                      </p>
+                    );
+                  }
+                  return googleDocs.map((doc) => {
+                    const embedUrl = doc.url.includes("/edit")
+                      ? doc.url.replace("/edit", "/preview")
+                      : doc.url.includes("/view")
+                      ? doc.url
+                      : doc.url + (doc.url.includes("?") ? "&" : "?") + "embedded=true";
+                    return (
+                      <div key={doc.id} className="rounded-lg border border-[#e8e6df] overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 bg-[#fafaf8] border-b border-[#e8e6df]">
+                          <div className="flex items-center gap-2">
+                            {getAttachmentIcon(doc.type)}
+                            <span className="text-xs font-medium text-[#1a1a18] truncate">{doc.name}</span>
+                          </div>
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[10px] text-[#3266ad] hover:underline"
+                          >
+                            Open in Google
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0"
+                          style={{ height: "400px" }}
+                          title={doc.name}
+                          sandbox="allow-scripts allow-same-origin allow-popups"
+                        />
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
 

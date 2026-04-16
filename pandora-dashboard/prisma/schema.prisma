@@ -25,6 +25,7 @@ model User {
   deletedCards     Card[]      @relation("CardDeletedBy")
   deletedWorkspaces Workspace[] @relation("WorkspaceDeletedBy")
   activityLogs  ActivityLog[]
+  attachments   CardAttachment[]
 }
 
 model Workspace {
@@ -108,6 +109,7 @@ model Card {
   notes        Note[]
   activities   Activity[]
   jobs         CardJob[]
+  attachments  CardAttachment[]
   deletedByUser User?   @relation("CardDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
 }
 
@@ -212,4 +214,17 @@ model ActivityLog {
   createdAt   DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model CardAttachment {
+  id        String   @id @default(cuid())
+  cardId    String
+  name      String
+  url       String
+  type      String   // google_doc, google_sheet, google_slide, link, file
+  addedById String
+  createdAt DateTime @default(now())
+
+  card    Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  addedBy User @relation(fields: [addedById], references: [id], onDelete: Cascade)
 }

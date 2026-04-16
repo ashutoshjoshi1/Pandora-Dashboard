@@ -10,6 +10,9 @@ import {
   Trash2,
   Loader2,
   X,
+  Plus,
+  Pencil,
+  Save,
 } from "lucide-react";
 import NewEntryWizard from "./NewEntryWizard";
 import WorkspaceReport from "./WorkspaceReport";
@@ -48,6 +51,13 @@ export default function WorkspaceClient({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<"boards" | "report">("boards");
+  const [showNewBoard, setShowNewBoard] = useState(false);
+  const [newBoardName, setNewBoardName] = useState("");
+  const [newBoardDesc, setNewBoardDesc] = useState("");
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  const [editBoardName, setEditBoardName] = useState("");
+  const [deletingBoardId, setDeletingBoardId] = useState<string | null>(null);
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -73,6 +83,48 @@ export default function WorkspaceClient({
       setDeleting(false);
       setConfirmingDelete(false);
     }
+  }
+
+  async function handleCreateBoard() {
+    if (!newBoardName.trim() || creatingBoard) return;
+    setCreatingBoard(true);
+    try {
+      const res = await fetch("/api/boards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: workspace.id,
+          name: newBoardName.trim(),
+          description: newBoardDesc.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewBoardName("");
+        setNewBoardDesc("");
+        setShowNewBoard(false);
+        router.refresh();
+      }
+    } finally {
+      setCreatingBoard(false);
+    }
+  }
+
+  async function handleRenameBoard(boardId: string) {
+    if (!editBoardName.trim()) return;
+    await fetch(`/api/boards/${boardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editBoardName.trim() }),
+    });
+    setEditingBoardId(null);
+    router.refresh();
+  }
+
+  async function handleDeleteBoard(boardId: string) {
+    await fetch(`/api/boards/${boardId}`, { method: "DELETE" });
+    setDeletingBoardId(null);
+    router.refresh();
   }
 
   return (
@@ -196,47 +248,158 @@ export default function WorkspaceClient({
 
         {/* Boards tab */}
         {activeTab === "boards" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {boards.map((board) => {
-              const cardCount = board.lists.reduce(
-                (sum, l) => sum + l._count.cards,
-                0
-              );
-              const listCount = board.lists.length;
+          <div className="space-y-4">
+            {/* New Board form */}
+            {showNewBoard && isAdmin && (
+              <div className="bg-white rounded-xl border-2 border-dashed border-[#3266ad] p-5 space-y-3">
+                <input
+                  type="text"
+                  value={newBoardName}
+                  onChange={(e) => setNewBoardName(e.target.value)}
+                  placeholder="Board name"
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-[#d3d1c7] text-sm text-[#1a1a18] placeholder:text-[#b4b2a9] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateBoard();
+                    if (e.key === "Escape") setShowNewBoard(false);
+                  }}
+                />
+                <input
+                  type="text"
+                  value={newBoardDesc}
+                  onChange={(e) => setNewBoardDesc(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="w-full px-3 py-2 rounded-lg border border-[#d3d1c7] text-sm text-[#1a1a18] placeholder:text-[#b4b2a9] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20 focus:border-[#3266ad]"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateBoard}
+                    disabled={!newBoardName.trim() || creatingBoard}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#1a1a18] text-white text-sm rounded-lg hover:bg-[#2a2a28] disabled:opacity-50"
+                  >
+                    {creatingBoard ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Create Board
+                  </button>
+                  <button
+                    onClick={() => setShowNewBoard(false)}
+                    className="px-4 py-2 text-sm text-[#888780] hover:text-[#1a1a18]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
-              return (
-                <a
-                  key={board.id}
-                  href={`/workspace/${workspace.slug}/board/${board.slug}`}
-                  className="group bg-white rounded-xl border border-[#d3d1c7] hover:border-[#888780] hover:shadow-md transition-all p-5"
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {boards.map((board) => {
+                const cardCount = board.lists.reduce(
+                  (sum, l) => sum + l._count.cards,
+                  0
+                );
+                const listCount = board.lists.length;
+
+                return (
+                  <div
+                    key={board.id}
+                    className="group bg-white rounded-xl border border-[#d3d1c7] hover:border-[#888780] hover:shadow-md transition-all p-5 relative"
+                  >
+                    {/* Board admin actions */}
+                    {isAdmin && (
+                      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setEditingBoardId(board.id);
+                            setEditBoardName(board.name);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-[#f5f4f0]"
+                          title="Rename board"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-[#888780]" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setDeletingBoardId(board.id);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-red-50"
+                          title="Delete board"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-[#b4b2a9] hover:text-red-500" />
+                        </button>
+                      </div>
+                    )}
+
+                    <a
+                      href={`/workspace/${workspace.slug}/board/${board.slug}`}
+                      className="block"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-[#f0f4ff] text-[#3266ad] flex items-center justify-center">
+                          <LayoutGrid className="w-5 h-5" />
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-[#b4b2a9] group-hover:text-[#1a1a18] group-hover:translate-x-0.5 transition-all" />
+                      </div>
+
+                      {editingBoardId === board.id ? (
+                        <div className="flex items-center gap-2 mb-1" onClick={(e) => e.preventDefault()}>
+                          <input
+                            type="text"
+                            value={editBoardName}
+                            onChange={(e) => setEditBoardName(e.target.value)}
+                            autoFocus
+                            className="flex-1 text-base font-medium text-[#1a1a18] px-2 py-0.5 rounded border border-[#d3d1c7] focus:outline-none focus:ring-2 focus:ring-[#3266ad]/20"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameBoard(board.id);
+                              if (e.key === "Escape") setEditingBoardId(null);
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRenameBoard(board.id)}
+                            className="p-1 bg-[#1a1a18] text-white rounded"
+                          >
+                            <Save className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <h3 className="text-base font-medium text-[#1a1a18] mb-1">
+                          {board.name}
+                        </h3>
+                      )}
+                      {board.description && (
+                        <p className="text-xs text-[#888780] leading-relaxed mb-3 line-clamp-2">
+                          {board.description}
+                        </p>
+                      )}
+
+                      <div className="flex gap-4 text-xs text-[#5f5e5a]">
+                        <span>
+                          <strong className="font-medium">{listCount}</strong> lists
+                        </span>
+                        <span>
+                          <strong className="font-medium">{cardCount}</strong> cards
+                        </span>
+                      </div>
+                    </a>
+                  </div>
+                );
+              })}
+
+              {/* New Board card */}
+              {isAdmin && !showNewBoard && (
+                <button
+                  onClick={() => setShowNewBoard(true)}
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#d3d1c7] hover:border-[#3266ad] hover:bg-[#f0f4ff]/30 transition-all p-5 min-h-[140px] group"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#f0f4ff] text-[#3266ad] flex items-center justify-center">
-                      <LayoutGrid className="w-5 h-5" />
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-[#b4b2a9] group-hover:text-[#1a1a18] group-hover:translate-x-0.5 transition-all" />
+                  <div className="w-10 h-10 rounded-lg bg-[#f5f4f0] group-hover:bg-[#f0f4ff] text-[#888780] group-hover:text-[#3266ad] flex items-center justify-center mb-2 transition">
+                    <Plus className="w-5 h-5" />
                   </div>
-
-                  <h3 className="text-base font-medium text-[#1a1a18] mb-1">
-                    {board.name}
-                  </h3>
-                  {board.description && (
-                    <p className="text-xs text-[#888780] leading-relaxed mb-3 line-clamp-2">
-                      {board.description}
-                    </p>
-                  )}
-
-                  <div className="flex gap-4 text-xs text-[#5f5e5a]">
-                    <span>
-                      <strong className="font-medium">{listCount}</strong> lists
-                    </span>
-                    <span>
-                      <strong className="font-medium">{cardCount}</strong> cards
-                    </span>
-                  </div>
-                </a>
-              );
-            })}
+                  <span className="text-sm text-[#888780] group-hover:text-[#3266ad] font-medium">
+                    New Board
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -254,6 +417,45 @@ export default function WorkspaceClient({
           boards={boardsForWizard}
           onClose={() => setWizardType(null)}
         />
+      )}
+
+      {/* Board Delete Confirmation Modal */}
+      {deletingBoardId && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setDeletingBoardId(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-medium text-[#1a1a18]">Delete Board?</h3>
+                <p className="text-sm text-[#5f5e5a] mt-1">
+                  This board and all its lists and cards will be permanently deleted. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-[#fafaf8] border-t border-[#e8e6df] flex justify-end gap-2">
+              <button
+                onClick={() => setDeletingBoardId(null)}
+                className="px-4 py-2 text-sm text-[#5f5e5a] hover:text-[#1a1a18] transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteBoard(deletingBoardId)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Delete Board
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

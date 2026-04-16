@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import AppHeader from "@/components/layout/AppHeader";
-import { FlaskConical, Satellite, ArrowRight, BarChart3, Clock, Layers } from "lucide-react";
+import { ArrowRight, BarChart3, Clock, Layers, LayoutGrid } from "lucide-react";
 import DashboardClient from "@/components/workspace/DashboardClient";
 
 export default async function DashboardPage() {
@@ -95,52 +95,28 @@ export default async function DashboardPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {workspaces.map((ws) => {
-            const icon =
-              ws.slug === "sciglob" ? (
-                <FlaskConical className="w-6 h-6" />
-              ) : (
-                <Satellite className="w-6 h-6" />
-              );
-
             const boardCount = ws.boards.length;
             const cardCount = ws.boards.reduce(
               (bs, b) =>
                 bs + b.lists.reduce((ls, l) => ls + l._count.cards, 0),
               0
             );
-
-            const colorMap: Record<string, string> = {
-              sciglob: "#2a7a4a",
-              "nasa-gsfc": "#3266ad",
-            };
-            const bgMap: Record<string, string> = {
-              sciglob: "#f0fff5",
-              "nasa-gsfc": "#f0f4ff",
-            };
-            const borderMap: Record<string, string> = {
-              sciglob: "#9FE1CB",
-              "nasa-gsfc": "#B5D4F4",
-            };
+            const color = ws.color || "#3266ad";
 
             return (
               <Link
                 key={ws.id}
                 href={`/workspace/${ws.slug}`}
                 className="group bg-white rounded-xl border-2 transition-all hover:shadow-md"
-                style={{
-                  borderColor: borderMap[ws.slug] || "#d3d1c7",
-                }}
+                style={{ borderColor: color + "40" }}
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div
                       className="w-12 h-12 rounded-xl flex items-center justify-center"
-                      style={{
-                        backgroundColor: bgMap[ws.slug] || "#f5f4f0",
-                        color: colorMap[ws.slug] || "#1a1a18",
-                      }}
+                      style={{ backgroundColor: color + "15", color }}
                     >
-                      {icon}
+                      <LayoutGrid className="w-6 h-6" />
                     </div>
                     <ArrowRight className="w-5 h-5 text-[#b4b2a9] group-hover:text-[#1a1a18] group-hover:translate-x-0.5 transition-all" />
                   </div>
@@ -159,7 +135,7 @@ export default async function DashboardPage() {
                     </span>
                     <span>
                       <strong className="font-medium">{cardCount}</strong>{" "}
-                      instruments
+                      cards
                     </span>
                   </div>
                 </div>

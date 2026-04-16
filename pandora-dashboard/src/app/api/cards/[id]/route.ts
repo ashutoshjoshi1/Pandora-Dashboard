@@ -32,6 +32,10 @@ export async function GET(
       },
       list: { include: { board: { include: { workspace: true } } } },
       jobs: { orderBy: { position: "asc" }, include: { user: { select: { id: true, fullName: true } } } },
+      attachments: {
+        include: { addedBy: { select: { id: true, fullName: true, username: true } } },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -92,7 +96,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { title, description, status, priority, listId } = body;
+  const { title, description, status, priority, listId, dueDate } = body;
 
   const existing = await prisma.card.findUnique({ where: { id } });
   if (!existing || existing.deletedAt) {
@@ -107,6 +111,7 @@ export async function PATCH(
       ...(status !== undefined && { status }),
       ...(priority !== undefined && { priority }),
       ...(listId !== undefined && { listId }),
+      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
     },
   });
 
@@ -115,6 +120,8 @@ export async function PATCH(
   if (title !== undefined && title !== existing.title) changes.push("title");
   if (description !== undefined && description !== existing.description) changes.push("description");
   if (status !== undefined && status !== existing.status) changes.push("status");
+  if (priority !== undefined && priority !== existing.priority) changes.push("priority");
+  if (dueDate !== undefined) changes.push("due date");
   if (listId !== undefined && listId !== existing.listId) changes.push("list");
 
   if (changes.length > 0) {
